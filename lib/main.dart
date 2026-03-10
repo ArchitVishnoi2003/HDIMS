@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutterapp/pages/signup_page.dart';
 import 'firebase_options.dart';
 import 'package:flutterapp/pages/ask_diet_plan.dart';
+import 'package:flutterapp/pages/consent_screen.dart';
 
 
 void main()async{
@@ -85,7 +86,14 @@ class UserTypeWrapper extends StatelessWidget {
           if (userType == null) {
             // User exists but doesn't have userType field - show selection screen
             return const UserTypeSelection();
-          } else if (userType == 'hospital') {
+          }
+
+          // Require consent before proceeding to any dashboard
+          if (userData['privacyConsentAt'] == null) {
+            return const ConsentScreen();
+          }
+
+          if (userType == 'hospital') {
             return const Dashboard();
           } else {
             return const PatientDashboard();

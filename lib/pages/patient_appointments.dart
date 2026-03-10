@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterapp/services/encryption_service.dart';
 
 class PatientAppointments extends StatefulWidget {
   const PatientAppointments({super.key});
@@ -16,6 +18,43 @@ class _PatientAppointmentsState extends State<PatientAppointments> {
       .collection('users')
       .doc(_user!.uid)
       .collection('appointments');
+
+  bool _privacyEnabled = false;
+  bool _loading = true;
+  List<Map<String, dynamic>> _appointments = [];
+  StreamSubscription? _aptSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _initPrivacy();
+  }
+
+  @override
+  void dispose() {
+    _aptSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initPrivacy() async {
+    final uid = _user?.uid;
+    if (uid == null) return;
+    _privacyEnabled = await EncryptionService.isEnabled(uid);
+    _aptSub = _aptsRef.orderBy('date').snapshots().listen((snap) async {
+      final decrypted = await Future.wait(snap.docs.map((d) async {
+        final raw = d.data() as Map<String, dynamic>;
+        final dec = _privacyEnabled ? await EncryptionService.decryptMap(uid, raw) : raw;
+        return {'id': d.id, ...dec};
+      }));
+      if (mounted) setState(() { _appointments = decrypted; _loading = false; });
+    });
+  }
+
+  Future<Map<String, dynamic>> _prepare(Map<String, dynamic> data) async {
+    final uid = _user?.uid;
+    if (!_privacyEnabled || uid == null) return data;
+    return EncryptionService.encryptMap(uid, data);
+  }
 
   // ─── Add/Edit appointment ─────────────────────────────────────────────────
   void _showAppointmentSheet({Map<String, dynamic>? existing, String? docId}) {
@@ -102,7 +141,7 @@ class _PatientAppointmentsState extends State<PatientAppointments> {
                   onPressed: () async {
                     if (doctorC.text.trim().isEmpty ||
                         dateC.text.trim().isEmpty) { return; }
-                    final data = {
+                    final data = await _prepare({
                       'doctor': doctorC.text.trim(),
                       'hospital': hospitalC.text.trim(),
                       'department': deptC.text.trim(),
@@ -111,7 +150,7 @@ class _PatientAppointmentsState extends State<PatientAppointments> {
                       'type': typeC.text.trim(),
                       'notes': notesC.text.trim(),
                       'status': status,
-                    };
+                    });
                     if (docId == null) {
                       await _aptsRef.add(data);
                     } else {
@@ -175,20 +214,9 @@ class _PatientAppointmentsState extends State<PatientAppointments> {
             style: TextStyle(
                 color: Colors.white, fontWeight: FontWeight.bold)),
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _aptsRef.orderBy('date', descending: false).snapshots(),
-        builder: (_, snap) {
-          final docs = snap.data?.docs ?? [];
-          final upcoming = docs
-              .where((d) =>
-                  (d.data() as Map<String, dynamic>)['status'] ==
-                  'Upcoming')
-              .toList();
-          final past = docs
-              .where((d) =>
-                  (d.data() as Map<String, dynamic>)['status'] !=
-                  'Upcoming')
-              .toList();
+      body: Builder(builder: (_) {
+          final upcoming = _appointments.where((d) => d['status'] == 'Upcoming').toList();
+          final past = _appointments.where((d) => d['status'] != 'Upcoming').toList();
 
           return SingleChildScrollView(
             child: Column(
@@ -207,8 +235,7 @@ class _PatientAppointmentsState extends State<PatientAppointments> {
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF6C5CE7)
-                            .withValues(alpha: 0.3),
+                        color: const Color(0xFF6C5CE7).withValues(alpha: 0.3),
                         blurRadius: 15,
                         offset: const Offset(0, 8),
                       ),
@@ -224,82 +251,60 @@ class _PatientAppointmentsState extends State<PatientAppointments> {
                               fontWeight: FontWeight.bold)),
                       SizedBox(height: 8),
                       Text('Manage your upcoming and past appointments',
-                          style: TextStyle(
-                              color: Colors.white70, fontSize: 14)),
+                          style: TextStyle(color: Colors.white70, fontSize: 14)),
                     ],
                   ),
                 ),
 
                 // Stats row
-                if (snap.connectionState != ConnectionState.waiting)
+                if (!_loading)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     child: Row(
                       children: [
-                        Expanded(
-                            child: _statCard('Upcoming',
-                                upcoming.length.toString(),
-                                Icons.schedule, Colors.green)),
+                        Expanded(child: _statCard('Upcoming', upcoming.length.toString(), Icons.schedule, Colors.green)),
                         const SizedBox(width: 15),
-                        Expanded(
-                            child: _statCard('Past', past.length.toString(),
-                                Icons.history, Colors.blue)),
+                        Expanded(child: _statCard('Past', past.length.toString(), Icons.history, Colors.blue)),
                       ],
                     ),
                   ),
 
                 const SizedBox(height: 20),
 
-                if (snap.connectionState == ConnectionState.waiting)
+                if (_loading)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 40),
-                    child: Center(
-                        child: CircularProgressIndicator(
-                            color: Color(0xFF6C5CE7))),
+                    child: Center(child: CircularProgressIndicator(color: Color(0xFF6C5CE7))),
                   )
-                else if (docs.isEmpty)
+                else if (_appointments.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 50),
                     child: Center(
                       child: Column(
                         children: [
-                          Icon(Icons.calendar_today,
-                              size: 56, color: Colors.grey[400]),
+                          Icon(Icons.calendar_today, size: 56, color: Colors.grey[400]),
                           const SizedBox(height: 14),
                           Text('No appointments yet',
-                              style: TextStyle(
-                                  color: Colors.grey[500], fontSize: 15)),
+                              style: TextStyle(color: Colors.grey[500], fontSize: 15)),
                           const SizedBox(height: 8),
                           Text('Tap Book to schedule one',
-                              style: TextStyle(
-                                  color: Colors.grey[400], fontSize: 13)),
+                              style: TextStyle(color: Colors.grey[400], fontSize: 13)),
                         ],
                       ),
                     ),
                   )
                 else ...[
                   if (upcoming.isNotEmpty)
-                    _section(
-                      icon: Icons.schedule,
-                      iconColor: Colors.green[600]!,
-                      title: 'Upcoming',
-                      docs: upcoming,
-                    ),
+                    _section(icon: Icons.schedule, iconColor: Colors.green[600]!, title: 'Upcoming', docs: upcoming),
                   if (past.isNotEmpty)
-                    _section(
-                      icon: Icons.history,
-                      iconColor: Colors.blue[600]!,
-                      title: 'Past',
-                      docs: past,
-                    ),
+                    _section(icon: Icons.history, iconColor: Colors.blue[600]!, title: 'Past', docs: past),
                 ],
 
                 const SizedBox(height: 100),
               ],
             ),
           );
-        },
-      ),
+        }),
     );
   }
 
@@ -307,7 +312,7 @@ class _PatientAppointmentsState extends State<PatientAppointments> {
     required IconData icon,
     required Color iconColor,
     required String title,
-    required List<QueryDocumentSnapshot> docs,
+    required List<Map<String, dynamic>> docs,
   }) {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -336,15 +341,11 @@ class _PatientAppointmentsState extends State<PatientAppointments> {
                     color: Color(0xFF6C5CE7))),
           ]),
           const SizedBox(height: 16),
-          ...docs.map((doc) {
-            final d = doc.data() as Map<String, dynamic>;
-            return _AppointmentCard(
-              data: d,
-              onEdit: () =>
-                  _showAppointmentSheet(existing: d, docId: doc.id),
-              onDelete: () => _deleteAppointment(doc.id),
-            );
-          }),
+          ...docs.map((d) => _AppointmentCard(
+                data: d,
+                onEdit: () => _showAppointmentSheet(existing: d, docId: d['id'] as String),
+                onDelete: () => _deleteAppointment(d['id'] as String),
+              )),
         ],
       ),
     );

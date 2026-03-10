@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterapp/services/encryption_service.dart';
 
 class PatientMedicinesAllergy extends StatefulWidget {
   const PatientMedicinesAllergy({super.key});
@@ -22,6 +24,62 @@ class _PatientMedicinesAllergyState extends State<PatientMedicinesAllergy> {
       .collection('users')
       .doc(_user!.uid)
       .collection('medications');
+
+  bool _privacyEnabled = false;
+  bool _loading = true;
+  List<Map<String, dynamic>> _allergies = [];
+  List<Map<String, dynamic>> _medications = [];
+  StreamSubscription? _allergySub;
+  StreamSubscription? _medicationSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _initPrivacy();
+  }
+
+  @override
+  void dispose() {
+    _allergySub?.cancel();
+    _medicationSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initPrivacy() async {
+    final uid = _user?.uid;
+    if (uid == null) return;
+    _privacyEnabled = await EncryptionService.isEnabled(uid);
+    _startListening();
+  }
+
+  void _startListening() {
+    final uid = _user?.uid;
+    if (uid == null) return;
+
+    _allergySub = _allergiesRef.orderBy('allergen').snapshots().listen((snap) async {
+      final decrypted = await Future.wait(snap.docs.map((d) async {
+        final raw = d.data() as Map<String, dynamic>;
+        final dec = _privacyEnabled ? await EncryptionService.decryptMap(uid, raw) : raw;
+        return {'id': d.id, ...dec};
+      }));
+      if (mounted) setState(() { _allergies = decrypted; _loading = false; });
+    });
+
+    _medicationSub = _medicationsRef.orderBy('name').snapshots().listen((snap) async {
+      final decrypted = await Future.wait(snap.docs.map((d) async {
+        final raw = d.data() as Map<String, dynamic>;
+        final dec = _privacyEnabled ? await EncryptionService.decryptMap(uid, raw) : raw;
+        return {'id': d.id, ...dec};
+      }));
+      if (mounted) setState(() { _medications = decrypted; _loading = false; });
+    });
+  }
+
+  Future<Map<String, dynamic>> _prepare(Map<String, dynamic> data) async {
+    final uid = _user?.uid;
+    if (!_privacyEnabled || uid == null) return data;
+    return EncryptionService.encryptMap(uid, data);
+  }
 
   // ─── Severity helpers ────────────────────────────────────────────────────
   static Color _severityColor(String severity) {
@@ -89,11 +147,11 @@ class _PatientMedicinesAllergyState extends State<PatientMedicinesAllergy> {
                   ),
                   onPressed: () async {
                     if (allergenC.text.trim().isEmpty) return;
-                    final data = {
+                    final data = await _prepare({
                       'allergen': allergenC.text.trim(),
                       'description': descC.text.trim(),
                       'severity': severity,
-                    };
+                    });
                     if (docId == null) {
                       await _allergiesRef.add(data);
                     } else {
@@ -156,13 +214,13 @@ class _PatientMedicinesAllergyState extends State<PatientMedicinesAllergy> {
                 ),
                 onPressed: () async {
                   if (nameC.text.trim().isEmpty) return;
-                  final data = {
+                  final data = await _prepare({
                     'name': nameC.text.trim(),
                     'dosage': dosageC.text.trim(),
                     'frequency': freqC.text.trim(),
                     'purpose': purposeC.text.trim(),
                     'startDate': startC.text.trim(),
-                  };
+                  });
                   if (docId == null) {
                     await _medicationsRef.add(data);
                   } else {
@@ -271,38 +329,22 @@ class _PatientMedicinesAllergyState extends State<PatientMedicinesAllergy> {
             onAdd: () => _showAllergySheet(),
             addLabel: 'Add Allergy',
             addColor: Colors.red,
-            child: StreamBuilder<QuerySnapshot>(
-              stream: _allergiesRef
-                  .orderBy('allergen')
-                  .snapshots(),
-              builder: (_, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Padding(
+            child: _loading
+                ? const Padding(
                     padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Center(
-                        child: CircularProgressIndicator(
-                            color: Color(0xFF6C5CE7))),
-                  );
-                }
-                final docs = snap.data?.docs ?? [];
-                if (docs.isEmpty) {
-                  return _emptyState(
-                      'No allergies recorded', Icons.check_circle_outline);
-                }
-                return Column(
-                  children: docs.map((doc) {
-                    final d = doc.data() as Map<String, dynamic>;
-                    return _AllergyCard(
-                      allergen: d['allergen'] ?? '',
-                      description: d['description'] ?? '',
-                      severity: d['severity'] ?? 'Low',
-                      onEdit: () => _showAllergySheet(existing: d, docId: doc.id),
-                      onDelete: () => _deleteAllergy(doc.id),
-                    );
-                  }).toList(),
-                );
-              },
-            ),
+                    child: Center(child: CircularProgressIndicator(color: Color(0xFF6C5CE7))),
+                  )
+                : _allergies.isEmpty
+                    ? _emptyState('No allergies recorded', Icons.check_circle_outline)
+                    : Column(
+                        children: _allergies.map((d) => _AllergyCard(
+                          allergen: d['allergen'] ?? '',
+                          description: d['description'] ?? '',
+                          severity: d['severity'] ?? 'Low',
+                          onEdit: () => _showAllergySheet(existing: d, docId: d['id'] as String),
+                          onDelete: () => _deleteAllergy(d['id'] as String),
+                        )).toList(),
+                      ),
           ),
 
           const SizedBox(height: 20),
@@ -316,41 +358,24 @@ class _PatientMedicinesAllergyState extends State<PatientMedicinesAllergy> {
             onAdd: () => _showMedicationSheet(),
             addLabel: 'Add Medication',
             addColor: Colors.green[600]!,
-            child: StreamBuilder<QuerySnapshot>(
-              stream: _medicationsRef
-                  .orderBy('name')
-                  .snapshots(),
-              builder: (_, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Padding(
+            child: _loading
+                ? const Padding(
                     padding: EdgeInsets.symmetric(vertical: 20),
-                    child: Center(
-                        child: CircularProgressIndicator(
-                            color: Color(0xFF6C5CE7))),
-                  );
-                }
-                final docs = snap.data?.docs ?? [];
-                if (docs.isEmpty) {
-                  return _emptyState(
-                      'No medications recorded', Icons.medication_liquid);
-                }
-                return Column(
-                  children: docs.map((doc) {
-                    final d = doc.data() as Map<String, dynamic>;
-                    return _MedicationCard(
-                      name: d['name'] ?? '',
-                      dosage: d['dosage'] ?? '',
-                      frequency: d['frequency'] ?? '',
-                      purpose: d['purpose'] ?? '',
-                      startDate: d['startDate'] ?? '',
-                      onEdit: () =>
-                          _showMedicationSheet(existing: d, docId: doc.id),
-                      onDelete: () => _deleteMedication(doc.id),
-                    );
-                  }).toList(),
-                );
-              },
-            ),
+                    child: Center(child: CircularProgressIndicator(color: Color(0xFF6C5CE7))),
+                  )
+                : _medications.isEmpty
+                    ? _emptyState('No medications recorded', Icons.medication_liquid)
+                    : Column(
+                        children: _medications.map((d) => _MedicationCard(
+                          name: d['name'] ?? '',
+                          dosage: d['dosage'] ?? '',
+                          frequency: d['frequency'] ?? '',
+                          purpose: d['purpose'] ?? '',
+                          startDate: d['startDate'] ?? '',
+                          onEdit: () => _showMedicationSheet(existing: d, docId: d['id'] as String),
+                          onDelete: () => _deleteMedication(d['id'] as String),
+                        )).toList(),
+                      ),
           ),
 
           // Important notice

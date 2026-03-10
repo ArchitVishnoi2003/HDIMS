@@ -15,6 +15,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _passwordController = TextEditingController();
   bool _isSignUp = true;
   bool _isLoading = false;
+  bool _consentGiven = false;
   String _selectedUserType = 'patient';
   String _selectedLoginType = 'patient'; // For login mode
 
@@ -58,6 +59,8 @@ class _HomeScreenState extends State<HomeScreen> {
           'email': _emailController.text.trim(),
           'userType': _selectedUserType,
           'createdAt': FieldValue.serverTimestamp(),
+          'privacyConsentAt': FieldValue.serverTimestamp(),
+          'privacyConsentVersion': '1.0',
         });
 
         scaffoldMessenger.showSnackBar(
@@ -153,6 +156,212 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() {
       _isLoading = false;
     });
+  }
+
+  Future<void> _showPrivacyModal() async {
+    final ScrollController scrollCtrl = ScrollController();
+    bool scrolledToBottom = false;
+    bool localConsent = _consentGiven;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(builder: (ctx, setModal) {
+          scrollCtrl.addListener(() {
+            if (!scrolledToBottom &&
+                scrollCtrl.position.pixels >=
+                    scrollCtrl.position.maxScrollExtent - 60) {
+              setModal(() => scrolledToBottom = true);
+            }
+          });
+          return DraggableScrollableSheet(
+            initialChildSize: 0.92,
+            maxChildSize: 0.95,
+            minChildSize: 0.5,
+            builder: (_, __) => Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFFF8F9FA),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Column(
+                children: [
+                  // Handle bar
+                  Container(
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[400],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF6C5CE7), Color(0xFF74B9FF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.privacy_tip, color: Colors.white, size: 22),
+                        SizedBox(width: 10),
+                        Text('Privacy Policy & Terms',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                  // Scrollable content
+                  Expanded(
+                    child: Scrollbar(
+                      controller: scrollCtrl,
+                      child: SingleChildScrollView(
+                        controller: scrollCtrl,
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _privacySection('1. What We Collect',
+                                'HDIMSS collects personal and health information including your name, email address, contact details, medical history, allergies, medications, appointment records, vital signs, and AI-generated health recommendations. This information is collected when you create an account or enter records in the app.'),
+                            _privacySection('2. How We Use Your Data',
+                                'Your data is used solely to provide health record management features, to allow authorized healthcare providers to view your records, and to personalize AI-driven health recommendations. We do not sell, rent, or share your personal information with third parties for marketing purposes.'),
+                            _privacySection('3. Data Storage & Security',
+                                'All data is stored in Google Firebase (Firestore), a HIPAA-compliant cloud platform. You may optionally enable Privacy Mode, which encrypts your health records using AES-256 on your device before they are uploaded. In Privacy Mode your doctor must request and receive your explicit approval to view your records.'),
+                            _privacySection('4. AI Health Assistant',
+                                'When you use the AI diet and health assistant, your messages are sent to Google\'s Gemini AI service for processing. Do not include personal identifiers such as your full name, national ID, or date of birth in these messages. AI responses are stored both locally and in your account history.'),
+                            _privacySection('5. Your Rights',
+                                'You have the right to access, correct, and delete your personal health data at any time from within the app. You may disable Privacy Mode and reset your encryption PIN at any time. To request full account deletion, contact support@hdims.com.'),
+                            _privacySection('6. Doctor Access',
+                                'Healthcare providers who add you as a patient can view the medical records they have entered on your behalf. If you enable Privacy Mode, doctors must send an access request that you must explicitly approve before they can view your self-entered health records.'),
+                            _privacySection('7. Data Retention',
+                                'Your data is retained as long as your account is active. You may delete your records at any time from within the app. For account deletion requests email support@hdims.com.'),
+                            _privacySection('8. Contact',
+                                'For privacy-related questions contact our Data Protection Officer at privacy@hdims.com. For technical support contact support@hdims.com.'),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Last updated: March 2026  •  Version 1.0',
+                              style: TextStyle(
+                                  color: Colors.grey[500],
+                                  fontSize: 12,
+                                  fontStyle: FontStyle.italic),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  // Consent action bar
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.08),
+                          blurRadius: 8,
+                          offset: const Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (!scrolledToBottom)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              children: [
+                                Icon(Icons.arrow_downward,
+                                    size: 14, color: Colors.orange[700]),
+                                const SizedBox(width: 5),
+                                Text('Scroll down to read the full policy',
+                                    style: TextStyle(
+                                        color: Colors.orange[700], fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: localConsent,
+                              activeColor: const Color(0xFF6C5CE7),
+                              onChanged: scrolledToBottom
+                                  ? (v) => setModal(() => localConsent = v ?? false)
+                                  : null,
+                            ),
+                            const Expanded(
+                              child: Text(
+                                'I have read and agree to the Privacy Policy and Terms of Use',
+                                style: TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 48,
+                          child: ElevatedButton(
+                            onPressed: localConsent
+                                ? () => Navigator.of(ctx).pop(true)
+                                : null,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF6C5CE7),
+                              disabledBackgroundColor: Colors.grey[300],
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text('Confirm & Continue',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        });
+      },
+    ).then((result) {
+      if (result == true) {
+        setState(() => _consentGiven = true);
+      }
+      scrollCtrl.dispose();
+    });
+  }
+
+  Widget _privacySection(String title, String body) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF6C5CE7))),
+          const SizedBox(height: 5),
+          Text(body,
+              style: const TextStyle(
+                  fontSize: 13, color: Colors.black87, height: 1.6)),
+        ],
+      ),
+    );
   }
 
   void _navigateToDashboard(String userType) {
@@ -314,11 +523,71 @@ class _HomeScreenState extends State<HomeScreen> {
                       
                       const SizedBox(height: 30),
                       
+                      if (_isSignUp) ...[
+                        const SizedBox(height: 4),
+                        InkWell(
+                          onTap: _showPrivacyModal,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 10),
+                            decoration: BoxDecoration(
+                              color: _consentGiven
+                                  ? const Color(0xFF6C5CE7).withValues(alpha: 0.08)
+                                  : Colors.orange.withValues(alpha: 0.07),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: _consentGiven
+                                    ? const Color(0xFF6C5CE7).withValues(alpha: 0.4)
+                                    : Colors.orange.withValues(alpha: 0.5),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _consentGiven
+                                      ? Icons.check_circle
+                                      : Icons.privacy_tip_outlined,
+                                  color: _consentGiven
+                                      ? const Color(0xFF6C5CE7)
+                                      : Colors.orange[700],
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _consentGiven
+                                        ? 'Privacy Policy accepted'
+                                        : 'Read & accept Privacy Policy (required)',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: _consentGiven
+                                          ? const Color(0xFF6C5CE7)
+                                          : Colors.orange[800],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                Icon(
+                                  Icons.chevron_right,
+                                  color: _consentGiven
+                                      ? const Color(0xFF6C5CE7)
+                                      : Colors.orange[700],
+                                  size: 18,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+
                       SizedBox(
                         width: double.infinity,
                         height: 55,
                         child: ElevatedButton(
-                          onPressed: _isLoading ? null : _handleAuth,
+                          onPressed: (_isLoading || (_isSignUp && !_consentGiven))
+                              ? null
+                              : _handleAuth,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF6C5CE7),
                             shape: RoundedRectangleBorder(

@@ -8,6 +8,7 @@ import 'patient_checkups_history.dart';
 import 'patient_appointments.dart';
 import 'patient_routine.dart';
 import 'patient_profile.dart';
+import 'package:flutterapp/services/access_request_service.dart';
 
 class PatientDashboard extends StatefulWidget {
   const PatientDashboard({super.key});
@@ -148,7 +149,12 @@ class _PatientDashboardState extends State<PatientDashboard> {
           ),
         ],
       ),
-      body: _pages[_selectedIndex],
+      body: Column(
+        children: [
+          _buildAccessRequestBanner(),
+          Expanded(child: _pages[_selectedIndex]),
+        ],
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -200,6 +206,86 @@ class _PatientDashboardState extends State<PatientDashboard> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAccessRequestBanner() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const SizedBox.shrink();
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('access_requests')
+          .where('patientUid', isEqualTo: uid)
+          .where('status', isEqualTo: 'pending')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Column(
+          children: snapshot.data!.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final doctorName = data['doctorName'] as String? ?? 'A doctor';
+            return Container(
+              margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF6C5CE7).withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: const Color(0xFF6C5CE7).withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.lock_open,
+                      color: Color(0xFF6C5CE7), size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '$doctorName is requesting access to your health records.',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 32)),
+                    onPressed: () async {
+                      await AccessRequestService.denyRequest(doc.id);
+                    },
+                    child: const Text('Deny',
+                        style: TextStyle(color: Colors.red, fontSize: 12)),
+                  ),
+                  const SizedBox(width: 4),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF6C5CE7),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      minimumSize: const Size(0, 32),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () async {
+                      final doctorUid =
+                          data['doctorUid'] as String? ?? '';
+                      await AccessRequestService.approveRequest(
+                        requestId: doc.id,
+                        patientUid: uid,
+                        doctorUid: doctorUid,
+                      );
+                    },
+                    child: const Text('Approve',
+                        style:
+                            TextStyle(color: Colors.white, fontSize: 12)),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 

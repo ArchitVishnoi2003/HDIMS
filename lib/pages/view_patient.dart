@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterapp/services/access_request_service.dart';
 
 class ViewPatient extends StatefulWidget {
   const ViewPatient({super.key});
@@ -75,10 +76,39 @@ class _ViewPatientState extends State<ViewPatient> {
     });
   }
 
-  void _showPatientDetails(Map<String, dynamic> patient) {
+  Future<void> _showPatientDetails(Map<String, dynamic> patient) async {
+    // Look up the patient's user record by email to check privacy mode
+    String? patientUid;
+    bool privacyModeEnabled = false;
+    final email = patient['email'] as String?;
+    if (email != null && email.isNotEmpty) {
+      final userQuery = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+      if (userQuery.docs.isNotEmpty) {
+        patientUid = userQuery.docs.first.id;
+        privacyModeEnabled =
+            userQuery.docs.first.data()['privacyModeEnabled'] == true;
+      }
+    }
+    if (!mounted) return;
+
+    // Get the doctor's display name for the request
+    final doctorDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(FirebaseAuth.instance.currentUser?.uid)
+        .get();
+    final doctorName = doctorDoc.data()?['name'] as String? ??
+        FirebaseAuth.instance.currentUser?.email ??
+        'Doctor';
+
+    if (!mounted) return;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: Text(
           patient['name'] ?? 'Unknown Patient',
           style: const TextStyle(fontWeight: FontWeight.bold),
@@ -88,6 +118,31 @@ class _ViewPatientState extends State<ViewPatient> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (privacyModeEnabled)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 14),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6C5CE7).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                        color: const Color(0xFF6C5CE7).withValues(alpha: 0.3)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.lock, color: Color(0xFF6C5CE7), size: 16),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Privacy Mode is active. Patient-entered records are encrypted.',
+                          style:
+                              TextStyle(fontSize: 12, color: Color(0xFF6C5CE7)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               _buildDetailRow('Email', patient['email']),
               _buildDetailRow('Phone', patient['phone']),
               _buildDetailRow('Age', patient['age']),
@@ -97,7 +152,8 @@ class _ViewPatientState extends State<ViewPatient> {
               _buildDetailRow('Pin Code', patient['pin']),
               _buildDetailRow('Medical History', patient['medical history']),
               _buildDetailRow('Vaccination', patient['vaccination']),
-              _buildDetailRow('Current Medications', patient['current medication']),
+              _buildDetailRow(
+                  'Current Medications', patient['current medication']),
               _buildDetailRow('Family History', patient['family history']),
               _buildDetailRow('Allergies', patient['allergies']),
             ],
@@ -105,9 +161,32 @@ class _ViewPatientState extends State<ViewPatient> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Close'),
           ),
+          if (privacyModeEnabled && patientUid != null)
+            ElevatedButton.icon(
+              icon: const Icon(Icons.lock_open, size: 16, color: Colors.white),
+              label: const Text('Request Access',
+                  style: TextStyle(color: Colors.white, fontSize: 13)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6C5CE7),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                await AccessRequestService.requestAccess(
+                  patientUid: patientUid!,
+                  doctorName: doctorName,
+                );
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text(
+                          'Access request sent. Waiting for patient approval.')));
+                }
+              },
+            ),
         ],
       ),
     );

@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterapp/services/encryption_service.dart';
 
 class PatientCheckupsHistory extends StatefulWidget {
   const PatientCheckupsHistory({super.key});
@@ -16,6 +18,43 @@ class _PatientCheckupsHistoryState extends State<PatientCheckupsHistory> {
       .collection('users')
       .doc(_user!.uid)
       .collection('checkups');
+
+  bool _privacyEnabled = false;
+  bool _loading = true;
+  List<Map<String, dynamic>> _checkups = [];
+  StreamSubscription? _checkupSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _initPrivacy();
+  }
+
+  @override
+  void dispose() {
+    _checkupSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _initPrivacy() async {
+    final uid = _user?.uid;
+    if (uid == null) return;
+    _privacyEnabled = await EncryptionService.isEnabled(uid);
+    _checkupSub = _checkupsRef.orderBy('date', descending: true).snapshots().listen((snap) async {
+      final decrypted = await Future.wait(snap.docs.map((d) async {
+        final raw = d.data() as Map<String, dynamic>;
+        final dec = _privacyEnabled ? await EncryptionService.decryptMap(uid, raw) : raw;
+        return {'id': d.id, ...dec};
+      }));
+      if (mounted) setState(() { _checkups = decrypted; _loading = false; });
+    });
+  }
+
+  Future<Map<String, dynamic>> _prepare(Map<String, dynamic> data) async {
+    final uid = _user?.uid;
+    if (!_privacyEnabled || uid == null) return data;
+    return EncryptionService.encryptMap(uid, data);
+  }
 
   // ─── Add/Edit checkup ─────────────────────────────────────────────────────
   void _showCheckupSheet({Map<String, dynamic>? existing, String? docId}) {
@@ -87,7 +126,7 @@ class _PatientCheckupsHistoryState extends State<PatientCheckupsHistory> {
                 onPressed: () async {
                   if (dateC.text.trim().isEmpty ||
                       diseaseC.text.trim().isEmpty) { return; }
-                  final data = {
+                  final data = await _prepare({
                     'date': dateC.text.trim(),
                     'disease': diseaseC.text.trim(),
                     'treatment': treatmentC.text.trim(),
@@ -98,7 +137,7 @@ class _PatientCheckupsHistoryState extends State<PatientCheckupsHistory> {
                     'temp': tempC.text.trim(),
                     'weight': weightC.text.trim(),
                     'medicines': medicinesC.text.trim(),
-                  };
+                  });
                   if (docId == null) {
                     await _checkupsRef.add(data);
                   } else {
@@ -201,52 +240,36 @@ class _PatientCheckupsHistoryState extends State<PatientCheckupsHistory> {
             ),
 
             // Checkup list
-            StreamBuilder<QuerySnapshot>(
-              stream: _checkupsRef.orderBy('date', descending: true).snapshots(),
-              builder: (_, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 40),
-                    child: Center(
-                        child: CircularProgressIndicator(
-                            color: Color(0xFF6C5CE7))),
-                  );
-                }
-                final docs = snap.data?.docs ?? [];
-                if (docs.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 50),
-                    child: Center(
-                      child: Column(
-                        children: [
-                          Icon(Icons.history_edu,
-                              size: 56, color: Colors.grey[400]),
-                          const SizedBox(height: 14),
-                          Text('No checkup records yet',
-                              style: TextStyle(
-                                  color: Colors.grey[500], fontSize: 15)),
-                          const SizedBox(height: 8),
-                          Text('Tap + Add Record to begin',
-                              style: TextStyle(
-                                  color: Colors.grey[400], fontSize: 13)),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-                return Column(
-                  children: docs.map((doc) {
-                    final d = doc.data() as Map<String, dynamic>;
-                    return _CheckupCard(
-                      data: d,
-                      onEdit: () =>
-                          _showCheckupSheet(existing: d, docId: doc.id),
-                      onDelete: () => _deleteCheckup(doc.id),
-                    );
-                  }).toList(),
-                );
-              },
-            ),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(child: CircularProgressIndicator(color: Color(0xFF6C5CE7))),
+              )
+            else if (_checkups.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 50),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.history_edu, size: 56, color: Colors.grey[400]),
+                      const SizedBox(height: 14),
+                      Text('No checkup records yet',
+                          style: TextStyle(color: Colors.grey[500], fontSize: 15)),
+                      const SizedBox(height: 8),
+                      Text('Tap + Add Record to begin',
+                          style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Column(
+                children: _checkups.map((d) => _CheckupCard(
+                  data: d,
+                  onEdit: () => _showCheckupSheet(existing: d, docId: d['id'] as String),
+                  onDelete: () => _deleteCheckup(d['id'] as String),
+                )).toList(),
+              ),
 
             const SizedBox(height: 100), // FAB clearance
           ],
