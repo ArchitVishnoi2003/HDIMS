@@ -73,33 +73,53 @@ class _HomeScreenState extends State<HomeScreen> {
           password: _passwordController.text.trim(),
         );
 
-        // Check if user has userType field, if not, update it based on login selection
+        // Verify that the selected login type matches the stored userType
         User? currentUser = FirebaseAuth.instance.currentUser;
         if (currentUser != null) {
           DocumentSnapshot userDoc = await FirebaseFirestore.instance
               .collection('users')
               .doc(currentUser.uid)
               .get();
-          
+
+          String? storedType;
           if (userDoc.exists) {
-            Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
-            if (userData['userType'] == null) {
-              // Update userType based on login selection
+            final userData = userDoc.data() as Map<String, dynamic>;
+            storedType = userData['userType'] as String?;
+
+            if (storedType == null) {
+              // Legacy account with no type — stamp it now
               await FirebaseFirestore.instance
                   .collection('users')
                   .doc(currentUser.uid)
-                  .update({
-                'userType': _selectedLoginType,
-              });
+                  .update({'userType': _selectedLoginType});
+              storedType = _selectedLoginType;
             }
+          }
+
+          // Block cross-type login
+          if (storedType != null && storedType != _selectedLoginType) {
+            await FirebaseAuth.instance.signOut();
+            final typeLabel = storedType == 'hospital' ? 'Hospital/Doctor' : 'Patient';
+            scaffoldMessenger.showSnackBar(
+              SnackBar(
+                content: Text(
+                  'This account is registered as a $typeLabel account. '
+                  'Please select the correct login type.',
+                ),
+                backgroundColor: Colors.red[700],
+                duration: const Duration(seconds: 4),
+              ),
+            );
+            setState(() => _isLoading = false);
+            return;
           }
         }
 
         scaffoldMessenger.showSnackBar(
           const SnackBar(content: Text('Signed in successfully!')),
         );
-        
-        // Navigate to appropriate dashboard based on user type
+
+        // Navigate to appropriate dashboard based on stored userType
         _navigateToDashboard(_selectedLoginType);
       }
     } on FirebaseAuthException catch (e) {
