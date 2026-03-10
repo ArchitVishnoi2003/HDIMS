@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterapp/services/access_request_service.dart';
 
 class DeletePatient extends StatefulWidget {
   const DeletePatient({super.key});
@@ -30,19 +31,26 @@ class _DeletePatientState extends State<DeletePatient> {
             .where('doctorId', isEqualTo: currentUser.uid)
             .get();
 
+        var patients = querySnapshot.docs
+            .map((doc) => {
+                  'id': doc.id,
+                  ...doc.data() as Map<String, dynamic>,
+                })
+            .toList();
+
+        // Enrich with user-collection data where a linked account exists
+        patients = await AccessRequestService.enrichWithUserData(patients);
+
+        if (!mounted) return;
         setState(() {
-          _patients = querySnapshot.docs
-              .map((doc) => {
-                    'id': doc.id,
-                    ...doc.data() as Map<String, dynamic>,
-                  })
-              .toList();
+          _patients = patients;
           _filteredPatients = _patients;
           _isLoading = false;
         });
       }
     } catch (e) {
       print('Error fetching patients: $e');
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });

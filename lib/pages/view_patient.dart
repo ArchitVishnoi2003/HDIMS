@@ -31,27 +31,33 @@ class _ViewPatientState extends State<ViewPatient> {
             .where('doctorId', isEqualTo: currentUser.uid)
             .get();
 
+        var patients = querySnapshot.docs
+            .map((doc) => {
+                  'id': doc.id,
+                  ...doc.data() as Map<String, dynamic>,
+                })
+            .toList();
+
+        // Enrich with user-collection data where a linked account exists
+        patients = await AccessRequestService.enrichWithUserData(patients);
+
+        // Sort patients alphabetically by name on the client side
+        patients.sort((a, b) {
+          String nameA = a['name']?.toString().toLowerCase() ?? '';
+          String nameB = b['name']?.toString().toLowerCase() ?? '';
+          return nameA.compareTo(nameB);
+        });
+
+        if (!mounted) return;
         setState(() {
-          _patients = querySnapshot.docs
-              .map((doc) => {
-                    'id': doc.id,
-                    ...doc.data() as Map<String, dynamic>,
-                  })
-              .toList();
-          
-          // Sort patients alphabetically by name on the client side
-          _patients.sort((a, b) {
-            String nameA = a['name']?.toString().toLowerCase() ?? '';
-            String nameB = b['name']?.toString().toLowerCase() ?? '';
-            return nameA.compareTo(nameB);
-          });
-          
+          _patients = patients;
           _filteredPatients = _patients;
           _isLoading = false;
         });
       }
     } catch (e) {
       print('Error fetching patients: $e');
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -77,33 +83,31 @@ class _ViewPatientState extends State<ViewPatient> {
   }
 
   Future<void> _showPatientDetails(Map<String, dynamic> patient) async {
-    // Look up the patient's user record by email to check privacy mode
-    String? patientUid;
-    bool privacyModeEnabled = false;
-    final email = patient['email'] as String?;
-    if (email != null && email.isNotEmpty) {
-      final userQuery = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: email)
-          .limit(1)
-          .get();
-      if (userQuery.docs.isNotEmpty) {
-        patientUid = userQuery.docs.first.id;
-        privacyModeEnabled =
-            userQuery.docs.first.data()['privacyModeEnabled'] == true;
-      }
-    }
-    if (!mounted) return;
+    // Use pre-enriched data from _fetchPatients
+    final patientUid = patient['_userUid'] as String?;
+    final privacyModeEnabled = patient['_privacyMode'] == true;
+
+    final doctorUid = FirebaseAuth.instance.currentUser?.uid;
 
     // Get the doctor's display name for the request
     final doctorDoc = await FirebaseFirestore.instance
         .collection('users')
-        .doc(FirebaseAuth.instance.currentUser?.uid)
+        .doc(doctorUid)
         .get();
     final doctorName = doctorDoc.data()?['name'] as String? ??
         FirebaseAuth.instance.currentUser?.email ??
         'Doctor';
 
+    if (!mounted) return;
+
+    // Check if doctor already has approved access
+    String? approvedRequestId;
+    if (privacyModeEnabled && patientUid != null && doctorUid != null) {
+      approvedRequestId = await AccessRequestService.getApprovedRequestId(
+        doctorUid: doctorUid,
+        patientUid: patientUid,
+      );
+    }
     if (!mounted) return;
 
     showDialog(
@@ -129,15 +133,18 @@ class _ViewPatientState extends State<ViewPatient> {
                     border: Border.all(
                         color: const Color(0xFF6C5CE7).withValues(alpha: 0.3)),
                   ),
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.lock, color: Color(0xFF6C5CE7), size: 16),
-                      SizedBox(width: 8),
+                      const Icon(Icons.lock,
+                          color: Color(0xFF6C5CE7), size: 16),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Privacy Mode is active. Patient-entered records are encrypted.',
-                          style:
-                              TextStyle(fontSize: 12, color: Color(0xFF6C5CE7)),
+                          approvedRequestId != null
+                              ? 'Privacy Mode is active. You have approved access.'
+                              : 'Privacy Mode is active. Patient-entered records are encrypted.',
+                          style: const TextStyle(
+                              fontSize: 12, color: Color(0xFF6C5CE7)),
                         ),
                       ),
                     ],
@@ -164,31 +171,179 @@ class _ViewPatientState extends State<ViewPatient> {
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Close'),
           ),
-          if (privacyModeEnabled && patientUid != null)
-            ElevatedButton.icon(
-              icon: const Icon(Icons.lock_open, size: 16, color: Colors.white),
-              label: const Text('Request Access',
-                  style: TextStyle(color: Colors.white, fontSize: 13)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C5CE7),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+          if (privacyModeEnabled && patientUid != null) ...[
+            if (approvedRequestId != null)
+              ElevatedButton.icon(
+                icon: const Icon(Icons.visibility,
+                    size: 16, color: Colors.white),
+                label: const Text('View Records',
+                    style: TextStyle(color: Colors.white, fontSize: 13)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green[600],
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  _showSessionRecords(approvedRequestId!, patientUid,
+                      patient['name'] ?? 'Patient');
+                },
+              )
+            else
+              ElevatedButton.icon(
+                icon: const Icon(Icons.lock_open,
+                    size: 16, color: Colors.white),
+                label: const Text('Request Access',
+                    style: TextStyle(color: Colors.white, fontSize: 13)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6C5CE7),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () async {
+                  Navigator.of(ctx).pop();
+                  await AccessRequestService.requestAccess(
+                    patientUid: patientUid,
+                    doctorName: doctorName,
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text(
+                            'Access request sent. Waiting for patient approval.')));
+                  }
+                },
               ),
-              onPressed: () async {
-                Navigator.of(ctx).pop();
-                await AccessRequestService.requestAccess(
-                  patientUid: patientUid!,
-                  doctorName: doctorName,
-                );
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                      content: Text(
-                          'Access request sent. Waiting for patient approval.')));
-                }
-              },
-            ),
+          ],
         ],
       ),
+    );
+  }
+
+  Future<void> _showSessionRecords(
+      String requestId, String patientUid, String patientName) async {
+    final session =
+        await AccessRequestService.readSession(requestId, patientUid);
+    if (!mounted) return;
+
+    if (session == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Access session expired or not found.')));
+      return;
+    }
+
+    final medications =
+        List<Map<String, dynamic>>.from(session['medications'] ?? []);
+    final allergies =
+        List<Map<String, dynamic>>.from(session['allergies'] ?? []);
+    final checkups =
+        List<Map<String, dynamic>>.from(session['checkups'] ?? []);
+    final appointments =
+        List<Map<String, dynamic>>.from(session['appointments'] ?? []);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('$patientName — Health Records',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: DefaultTabController(
+            length: 4,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const TabBar(
+                  isScrollable: true,
+                  labelColor: Color(0xFF6C5CE7),
+                  unselectedLabelColor: Colors.grey,
+                  indicatorColor: Color(0xFF6C5CE7),
+                  labelStyle: TextStyle(fontSize: 12),
+                  tabs: [
+                    Tab(text: 'Medications'),
+                    Tab(text: 'Allergies'),
+                    Tab(text: 'Checkups'),
+                    Tab(text: 'Appointments'),
+                  ],
+                ),
+                SizedBox(
+                  height: 300,
+                  child: TabBarView(
+                    children: [
+                      _buildRecordList(medications, [
+                        'name', 'dosage', 'frequency', 'purpose', 'startDate'
+                      ]),
+                      _buildRecordList(
+                          allergies, ['allergen', 'severity', 'description']),
+                      _buildRecordList(checkups, [
+                        'disease', 'date', 'doctor', 'hospital', 'treatment'
+                      ]),
+                      _buildRecordList(appointments, [
+                        'doctor', 'hospital', 'date', 'time', 'department',
+                        'status'
+                      ]),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecordList(
+      List<Map<String, dynamic>> records, List<String> fields) {
+    if (records.isEmpty) {
+      return const Center(
+          child: Text('No records', style: TextStyle(color: Colors.grey)));
+    }
+    return ListView.separated(
+      itemCount: records.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (_, i) {
+        final rec = records[i];
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: fields.where((f) {
+              final v = rec[f]?.toString() ?? '';
+              return v.isNotEmpty;
+            }).map((f) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 80,
+                      child: Text('$f:',
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                              color: Colors.black87)),
+                    ),
+                    Expanded(
+                      child: Text(rec[f].toString(),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.black54)),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+        );
+      },
     );
   }
 

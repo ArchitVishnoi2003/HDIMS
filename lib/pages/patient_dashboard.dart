@@ -8,6 +8,7 @@ import 'patient_checkups_history.dart';
 import 'patient_appointments.dart';
 import 'patient_routine.dart';
 import 'patient_profile.dart';
+import 'patient_privacy_security.dart';
 import 'package:flutterapp/services/access_request_service.dart';
 
 class PatientDashboard extends StatefulWidget {
@@ -127,6 +128,17 @@ class _PatientDashboardState extends State<PatientDashboard> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.shield, color: Colors.white),
+            tooltip: 'Privacy & Security',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const PatientPrivacySecurity()),
+              );
+            },
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, color: Colors.white),
             onSelected: (value) {
@@ -398,6 +410,18 @@ class _PatientDashboardState extends State<PatientDashboard> {
             },
           ),
           const Divider(),
+          ListTile(
+            leading: const Icon(Icons.shield, color: Color(0xFF6C5CE7)),
+            title: const Text('Privacy & Security'),
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const PatientPrivacySecurity()),
+              );
+            },
+          ),
           ListTile(
             leading: const Icon(Icons.account_circle, color: Color(0xFF6C5CE7)),
             title: const Text('Profile Settings'),

@@ -121,11 +121,33 @@ class _EditPatientDetailsState extends State<EditPatientDetails> {
         'updatedAt': FieldValue.serverTimestamp(),
       };
 
-      // Update in Firebase
+      // Update in Firebase (doctor's patients collection)
       await FirebaseFirestore.instance
           .collection('patients')
           .doc(widget.patient['id'])
           .update(patientData);
+
+      // Also sync overlapping fields to the patient's users/{uid} document
+      if (email.isNotEmpty) {
+        final userQuery = await FirebaseFirestore.instance
+            .collection('users')
+            .where('email', isEqualTo: email)
+            .limit(1)
+            .get();
+        if (userQuery.docs.isNotEmpty) {
+          final userRef = userQuery.docs.first.reference;
+          await userRef.update({
+            'name': name,
+            'phone': phone,
+            'address': address,
+            'age': int.tryParse(age) ?? 0,
+            'bloodGroup': blood,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      if (!mounted) return;
 
       // Show success message
       ScaffoldMessenger.of(context).showSnackBar(

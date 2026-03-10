@@ -104,6 +104,20 @@ Firestore value: "enc:<base64string>"
 ### Bulk Transform
 `encryptAllRecords` / `decryptAllRecords` iterate over four Firestore subcollections (`medications`, `allergies`, `checkups`, `appointments`) and batch-transform all documents.
 
+### What Gets Encrypted (Privacy Mode ON)
+
+| Location | Fields |
+|---|---|
+| `users/{uid}` | insuranceProvider, policyNumber, coverageType, validUntil |
+| `users/{uid}` | chronicConditions (each list item) |
+| `users/{uid}/medications/*` | All string fields |
+| `users/{uid}/allergies/*` | All string fields |
+| `users/{uid}/checkups/*` | All string fields (including medicines list items) |
+| `users/{uid}/appointments/*` | All string fields |
+
+### What Stays Unencrypted
+name, email, phone, address, age, gender, weight, height, bloodGroup, emergencyContact, userType, linkedPatientId, privacyModeEnabled
+
 ---
 
 ## Doctor Access Session Architecture
@@ -115,6 +129,7 @@ Doctor taps "Request Access"
 access_requests/{id}  { patientUid, doctorUid, doctorName, status:'pending', requestedAt }
   │
   │  patient_dashboard StreamBuilder watches pending requests
+  │  patient_privacy_security page also shows pending requests
   │
   ▼
 Patient taps "Approve"
@@ -131,8 +146,34 @@ Doctor reads session via AccessRequestService.readSession()
   │    Checks expiresAt; deletes document if expired; returns null if missing
   │
   ▼
-Session auto-expires after 4 hours
+Doctor can view decrypted records (tabbed dialog) and edit patient details
+  │
+  ▼
+Session auto-expires after 4 hours  OR  Patient taps "Revoke"
+  │    revokeAccess() deletes session doc + marks request 'revoked'
 ```
+
+---
+
+## Data Enrichment Architecture
+
+When doctor-side pages (View / Update / Delete) fetch patients from the `patients` collection, `AccessRequestService.enrichWithUserData()` is called to merge data from the `users` collection:
+
+```
+patients/{docId}  (doctor-entered data)
+        │
+        ▼  enrichWithUserData()
+        │    1. Query users collection by matching email
+        │    2. If linked account found:
+        │       - Overlay users fields (name, phone, address, age, bloodGroup, gender) onto patient map
+        │       - Attach _userUid (the user's UID) and _privacyMode (bool) as metadata
+        │    3. If no linked account: return patient data as-is
+        │
+        ▼
+Enriched patient map used for display and access checks
+```
+
+This ensures doctors always see the patient's most up-to-date self-maintained information.
 
 ---
 
@@ -155,7 +196,7 @@ FirebaseFirestore .collection('users').doc(uid).collection('<subcol>').add(encry
 Firestore snapshot arrives via StreamSubscription
         │
         ▼  listener (async)
-EncryptionService.decryptMap(uid, rawMap)
+ EncryptionService.decryptMap(uid, rawMap)
   └─  for each field starting with "enc:" → decrypt() → plaintext string
         │
         ▼
@@ -167,6 +208,24 @@ build() renders from state list (no StreamBuilder in widget tree)
 
 ---
 
+## Data Flow: Doctor Edit (Linked Patient)
+
+```
+Doctor modifies fields → taps Update Patient
+        │
+        ▼
+1. Update patients/{docId} in Firestore
+        │
+        ▼
+2. Query users collection by patient email
+        │  If linked account found:
+        ▼
+3. Update users/{uid} with overlapping fields
+   (name, phone, address, age, bloodGroup)
+```
+
+---
+
 ## Firestore Security Notes
 
 The app currently relies on Firebase Auth UID matching in client-side queries (`where('doctorId', isEqualTo: currentUser.uid)`). Production deployment should add Firestore Security Rules to enforce:
@@ -174,4 +233,4 @@ The app currently relies on Firebase Auth UID matching in client-side queries (`
 - Patients may only read/write their own subcollections (`request.auth.uid == uid`)
 - Doctors may only read patients where `doctorId == request.auth.uid`
 - Access sessions may only be read by the `doctorUid` stored in the document
-- Access requests may be created only by a doctor; approved/denied only by the patient
+- Access requests may be created only by a doctor; approved/denied/revoked only by the patient

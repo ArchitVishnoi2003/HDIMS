@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterapp/services/access_request_service.dart';
 import 'edit_patient_details.dart';
 
 class SelectPatientToUpdate extends StatefulWidget {
@@ -31,27 +32,33 @@ class _SelectPatientToUpdateState extends State<SelectPatientToUpdate> {
             .where('doctorId', isEqualTo: currentUser.uid)
             .get();
 
+        var patients = querySnapshot.docs
+            .map((doc) => {
+                  'id': doc.id,
+                  ...doc.data() as Map<String, dynamic>,
+                })
+            .toList();
+
+        // Enrich with user-collection data where a linked account exists
+        patients = await AccessRequestService.enrichWithUserData(patients);
+
+        // Sort patients alphabetically by name
+        patients.sort((a, b) {
+          String nameA = a['name']?.toString().toLowerCase() ?? '';
+          String nameB = b['name']?.toString().toLowerCase() ?? '';
+          return nameA.compareTo(nameB);
+        });
+
+        if (!mounted) return;
         setState(() {
-          _patients = querySnapshot.docs
-              .map((doc) => {
-                    'id': doc.id,
-                    ...doc.data() as Map<String, dynamic>,
-                  })
-              .toList();
-          
-          // Sort patients alphabetically by name
-          _patients.sort((a, b) {
-            String nameA = a['name']?.toString().toLowerCase() ?? '';
-            String nameB = b['name']?.toString().toLowerCase() ?? '';
-            return nameA.compareTo(nameB);
-          });
-          
+          _patients = patients;
           _filteredPatients = _patients;
           _isLoading = false;
         });
       }
     } catch (e) {
       print('Error fetching patients: $e');
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -76,7 +83,31 @@ class _SelectPatientToUpdateState extends State<SelectPatientToUpdate> {
     });
   }
 
-  void _navigateToEditPatient(Map<String, dynamic> patient) {
+  Future<void> _navigateToEditPatient(Map<String, dynamic> patient) async {
+    final doctorUid = FirebaseAuth.instance.currentUser?.uid;
+    if (doctorUid == null) return;
+
+    // Use pre-enriched privacy data from _fetchPatients
+    final privacyEnabled = patient['_privacyMode'] == true;
+    final patientUid = patient['_userUid'] as String?;
+
+    if (privacyEnabled && patientUid != null) {
+      final hasAccess = await AccessRequestService.hasAccess(
+        doctorUid: doctorUid,
+        patientUid: patientUid,
+      );
+      if (!mounted) return;
+
+      if (!hasAccess) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'This patient has Privacy Mode on. Request access from View Patients first.'),
+        ));
+        return;
+      }
+    }
+
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(

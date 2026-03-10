@@ -110,12 +110,18 @@ flutter build apk --release
 ### View / Search Patients
 1. Dashboard → **View Patients**
 2. Use the search bar to filter by name, email, or phone
-3. Tap a patient card to see full details
+3. Tap a patient card to see full details (enriched with patient's own data from `users` collection when linked)
+
+### View Decrypted Health Records
+1. In the patient details dialog, if the patient has approved your access request, a green **"View Records"** button appears
+2. Tap it to see a tabbed dialog with the patient's decrypted medications, allergies, checkups, and appointments
+3. The session expires automatically after 4 hours
 
 ### Edit a Patient
 1. Dashboard → **Update Patient**
 2. Search and select the patient
-3. Modify fields → tap **Update Patient**
+3. If the patient has Privacy Mode enabled, you must have an approved access session to proceed
+4. Modify fields → tap **Update Patient** — changes sync to both `patients` and `users` collections
 
 ### Delete a Patient
 1. Dashboard → **Delete Patient**
@@ -124,7 +130,8 @@ flutter build apk --release
 ### Requesting Access to Encrypted Records
 1. View a patient whose dialog shows a **Privacy Mode Active** banner
 2. Tap **Request Access**
-3. Wait for the patient to approve from their device (you will see the data once they do)
+3. Wait for the patient to approve from their device
+4. Once approved, the **"View Records"** button appears and the **Update Patient** flow is unblocked
 
 ---
 
@@ -142,7 +149,7 @@ The bottom navigation bar has six tabs:
 | Appointments | Booked appointments |
 | Routine | Daily health routine |
 
-Use the hamburger menu (top-left) for Profile Settings, AI Assistant, Help, and Sign Out.
+Use the hamburger menu (top-left) for Privacy & Security, Profile Settings, AI Assistant, Help, and Sign Out.
 
 ### Adding a Medication
 1. Medicines tab → **Add Medication** (green button)
@@ -162,23 +169,35 @@ Use the hamburger menu (top-left) for Profile Settings, AI Assistant, Help, and 
 
 ---
 
-## 8. Enabling Privacy Mode
+## 8. Privacy & Security
 
-1. Open the drawer → **Profile Settings**
-2. Scroll to the **Privacy Mode** card → toggle the switch ON
-3. Enter a 6-digit PIN and confirm it → tap **Enable Privacy Mode**
-4. All existing records are encrypted; new records are encrypted before upload
+### Accessing the Privacy & Security Page
+- Tap the **shield icon** (🛡) in the top-right of the AppBar, or
+- Open the drawer → tap **Privacy & Security**
+
+### Enabling Privacy Mode
+1. On the Privacy & Security page, toggle the **Privacy Mode** switch ON
+2. Enter a 6-digit PIN and confirm it → tap **Enable Privacy Mode**
+3. All existing records are encrypted; new records are encrypted before upload
 
 > **Important:** If you forget your PIN, encrypted records cannot be recovered. You will need to reset Privacy Mode, which deletes all encrypted records.
 
 ### Disabling Privacy Mode
-1. Profile Settings → Privacy Mode switch → toggle OFF
+1. Privacy & Security page → Privacy Mode switch → toggle OFF
 2. Confirm the dialog — all records are decrypted back to plaintext
 
 ### Approving a Doctor Access Request
-1. A banner appears at the top of the dashboard: *"Dr. [Name] is requesting access to your health records."*
-2. Tap **Approve** — a 4-hour decrypted session is created for the doctor
-3. Tap **Deny** — the request is rejected immediately
+Requests appear in two places:
+1. **Dashboard banner** — at the top of any tab: *"Dr. [Name] is requesting access to your health records."*
+2. **Privacy & Security page** — "Pending Access Requests" card
+
+Tap **Approve** — a 4-hour decrypted session is created for the doctor.
+Tap **Deny** — the request is rejected immediately.
+
+### Revoking Doctor Access
+1. Open the Privacy & Security page
+2. Under **Active Doctor Sessions**, find the doctor's session
+3. Tap **Revoke** — access is terminated immediately, the session snapshot is deleted
 
 ---
 

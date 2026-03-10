@@ -84,6 +84,23 @@ class AccessRequestService {
         .update({'status': 'denied'});
   }
 
+  /// Patient revokes an already-approved request.
+  static Future<void> revokeAccess(
+      String requestId, String patientUid) async {
+    // Delete the decrypted session
+    await _db
+        .collection('users')
+        .doc(patientUid)
+        .collection('access_sessions')
+        .doc(requestId)
+        .delete();
+    // Mark the request as revoked
+    await _db
+        .collection('access_requests')
+        .doc(requestId)
+        .update({'status': 'revoked'});
+  }
+
   /// Doctor reads session data. Returns null if not found or expired.
   static Future<Map<String, dynamic>?> readSession(
       String requestId, String patientUid) async {
@@ -101,5 +118,84 @@ class AccessRequestService {
       return null;
     }
     return data;
+  }
+
+  /// Checks if a doctor currently has approved (non-expired) access to a patient.
+  static Future<bool> hasAccess({
+    required String doctorUid,
+    required String patientUid,
+  }) async {
+    final snap = await _db
+        .collection('access_requests')
+        .where('patientUid', isEqualTo: patientUid)
+        .where('doctorUid', isEqualTo: doctorUid)
+        .where('status', isEqualTo: 'approved')
+        .get();
+    for (final doc in snap.docs) {
+      final expiresAt = (doc.data()['expiresAt'] as Timestamp?)?.toDate();
+      if (expiresAt != null && expiresAt.isAfter(DateTime.now())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Enriches a list of patients (from the `patients` collection) with
+  /// up-to-date data from the `users` collection where a linked account exists.
+  /// Each enriched patient gets a `_userUid` key so callers know it's linked.
+  static Future<List<Map<String, dynamic>>> enrichWithUserData(
+      List<Map<String, dynamic>> patients) async {
+    for (int i = 0; i < patients.length; i++) {
+      final email = patients[i]['email'] as String?;
+      if (email == null || email.isEmpty) continue;
+      final userQuery = await _db
+          .collection('users')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+      if (userQuery.docs.isNotEmpty) {
+        final ud = userQuery.docs.first.data();
+        patients[i]['_userUid'] = userQuery.docs.first.id;
+        patients[i]['_privacyMode'] = ud['privacyModeEnabled'] == true;
+        // Overwrite shared fields with user-doc values (patient's own data)
+        if (ud['name'] != null && (ud['name'] as String).isNotEmpty) {
+          patients[i]['name'] = ud['name'];
+        }
+        if (ud['phone'] != null && (ud['phone'] as String).isNotEmpty) {
+          patients[i]['phone'] = ud['phone'];
+        }
+        if (ud['address'] != null && (ud['address'] as String).isNotEmpty) {
+          patients[i]['address'] = ud['address'];
+        }
+        if (ud['age'] != null) {
+          patients[i]['age'] = ud['age'].toString();
+        }
+        if (ud['bloodGroup'] != null &&
+            (ud['bloodGroup'] as String).isNotEmpty) {
+          patients[i]['blood'] = ud['bloodGroup'];
+        }
+      }
+    }
+    return patients;
+  }
+
+  /// Returns the first valid (non-expired) approved request ID for a doctor+patient pair.
+  static Future<String?> getApprovedRequestId({
+    required String doctorUid,
+    required String patientUid,
+  }) async {
+    final snap = await _db
+        .collection('access_requests')
+        .where('patientUid', isEqualTo: patientUid)
+        .where('doctorUid', isEqualTo: doctorUid)
+        .where('status', isEqualTo: 'approved')
+        .get();
+    for (final doc in snap.docs) {
+      final expiresAt = (doc.data()['expiresAt'] as Timestamp?)?.toDate();
+      if (expiresAt != null && expiresAt.isAfter(DateTime.now())) {
+        return doc.id;
+      }
+    }
+    return null;
   }
 }
