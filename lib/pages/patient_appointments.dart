@@ -1,266 +1,365 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-class PatientAppointments extends StatelessWidget {
+class PatientAppointments extends StatefulWidget {
   const PatientAppointments({super.key});
 
   @override
+  State<PatientAppointments> createState() => _PatientAppointmentsState();
+}
+
+class _PatientAppointmentsState extends State<PatientAppointments> {
+  User? get _user => FirebaseAuth.instance.currentUser;
+
+  CollectionReference get _aptsRef => FirebaseFirestore.instance
+      .collection('users')
+      .doc(_user!.uid)
+      .collection('appointments');
+
+  // ─── Add/Edit appointment ─────────────────────────────────────────────────
+  void _showAppointmentSheet({Map<String, dynamic>? existing, String? docId}) {
+    final doctorC = TextEditingController(text: existing?['doctor'] ?? '');
+    final hospitalC =
+        TextEditingController(text: existing?['hospital'] ?? '');
+    final deptC =
+        TextEditingController(text: existing?['department'] ?? '');
+    final dateC = TextEditingController(text: existing?['date'] ?? '');
+    final timeC = TextEditingController(text: existing?['time'] ?? '');
+    final typeC = TextEditingController(text: existing?['type'] ?? '');
+    final notesC = TextEditingController(text: existing?['notes'] ?? '');
+    String status = existing?['status'] ?? 'Upcoming';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) => StatefulBuilder(
+        builder: (ctx, setSheet) => _BottomSheet(
+          title:
+              docId == null ? 'Book Appointment' : 'Edit Appointment',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _field(doctorC, 'Doctor Name', Icons.person),
+              const SizedBox(height: 12),
+              _field(hospitalC, 'Hospital / Clinic', Icons.local_hospital),
+              const SizedBox(height: 12),
+              _field(deptC, 'Department', Icons.medical_services),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                    child:
+                        _field(dateC, 'Date (YYYY-MM-DD)', Icons.calendar_today)),
+                const SizedBox(width: 10),
+                Expanded(
+                    child: _field(
+                        timeC, 'Time (e.g. 10:30 AM)', Icons.access_time)),
+              ]),
+              const SizedBox(height: 12),
+              _field(typeC, 'Type (e.g. Regular Checkup)', Icons.category),
+              const SizedBox(height: 12),
+              _field(notesC, 'Notes', Icons.notes),
+              const SizedBox(height: 14),
+              const Text('Status',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 14)),
+              const SizedBox(height: 8),
+              Row(
+                children:
+                    ['Upcoming', 'Completed', 'Cancelled'].map((s) {
+                  final sel = status == s;
+                  Color c = s == 'Upcoming'
+                      ? Colors.green
+                      : s == 'Completed'
+                          ? Colors.blue
+                          : Colors.red;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(s,
+                          style: TextStyle(
+                              color:
+                                  sel ? Colors.white : Colors.black87,
+                              fontSize: 12)),
+                      selected: sel,
+                      selectedColor: c,
+                      onSelected: (_) => setSheet(() => status = s),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6C5CE7),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () async {
+                    if (doctorC.text.trim().isEmpty ||
+                        dateC.text.trim().isEmpty) { return; }
+                    final data = {
+                      'doctor': doctorC.text.trim(),
+                      'hospital': hospitalC.text.trim(),
+                      'department': deptC.text.trim(),
+                      'date': dateC.text.trim(),
+                      'time': timeC.text.trim(),
+                      'type': typeC.text.trim(),
+                      'notes': notesC.text.trim(),
+                      'status': status,
+                    };
+                    if (docId == null) {
+                      await _aptsRef.add(data);
+                    } else {
+                      await _aptsRef.doc(docId).update(data);
+                    }
+                    if (ctx.mounted) { Navigator.pop(ctx); }
+                  },
+                  child: Text(
+                      docId == null
+                          ? 'Book Appointment'
+                          : 'Save Changes',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteAppointment(String docId) async {
+    final ok = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16)),
+            title: const Text('Delete Appointment'),
+            content:
+                const Text('Remove this appointment permanently?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancel')),
+              ElevatedButton(
+                style:
+                    ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete',
+                    style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (ok) { await _aptsRef.doc(docId).delete(); }
+  }
+
+  // ─── Build ────────────────────────────────────────────────────────────────
+  @override
   Widget build(BuildContext context) {
-    // Hardcoded appointments data
-    final appointments = [
-      {
-        "date": "2025-10-20",
-        "time": "10:30 AM",
-        "doctor": "Dr. Smith",
-        "hospital": "City Hospital",
-        "department": "General Medicine",
-        "status": "Upcoming",
-        "type": "Regular Checkup",
-        "notes": "Annual health checkup",
-      },
-      {
-        "date": "2025-11-05",
-        "time": "2:00 PM",
-        "doctor": "Dr. Emily",
-        "hospital": "Green Hospital",
-        "department": "Cardiology",
-        "status": "Upcoming",
-        "type": "Specialist Consultation",
-        "notes": "Blood pressure follow-up",
-      },
-      {
-        "date": "2025-09-10",
-        "time": "11:00 AM",
-        "doctor": "Dr. Emily",
-        "hospital": "Green Hospital",
-        "department": "General Medicine",
-        "status": "Completed",
-        "type": "Follow-up",
-        "notes": "Flu treatment follow-up",
-      },
-      {
-        "date": "2025-07-15",
-        "time": "3:30 PM",
-        "doctor": "Dr. Johnson",
-        "hospital": "City Hospital",
-        "department": "General Medicine",
-        "status": "Completed",
-        "type": "Regular Checkup",
-        "notes": "Allergy consultation",
-      },
-    ];
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showAppointmentSheet,
+        backgroundColor: const Color(0xFF6C5CE7),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('Book',
+            style: TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _aptsRef.orderBy('date', descending: false).snapshots(),
+        builder: (_, snap) {
+          final docs = snap.data?.docs ?? [];
+          final upcoming = docs
+              .where((d) =>
+                  (d.data() as Map<String, dynamic>)['status'] ==
+                  'Upcoming')
+              .toList();
+          final past = docs
+              .where((d) =>
+                  (d.data() as Map<String, dynamic>)['status'] !=
+                  'Upcoming')
+              .toList();
 
-    // Separate upcoming and completed appointments
-    final upcomingAppointments = appointments.where((apt) => apt['status'] == 'Upcoming').toList();
-    final completedAppointments = appointments.where((apt) => apt['status'] == 'Completed').toList();
-
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          // Header
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.all(20),
-            padding: const EdgeInsets.all(25),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6C5CE7), Color(0xFF74B9FF)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF6C5CE7).withOpacity(0.3),
-                  blurRadius: 15,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
+          return SingleChildScrollView(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Appointments",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  "Manage your upcoming and past appointments",
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Quick Stats
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    "Upcoming",
-                    upcomingAppointments.length.toString(),
-                    Icons.schedule,
-                    const Color(0xFF4CAF50),
-                  ),
-                ),
-                const SizedBox(width: 15),
-                Expanded(
-                  child: _buildStatCard(
-                    "Completed",
-                    completedAppointments.length.toString(),
-                    Icons.check_circle,
-                    const Color(0xFF2196F3),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 30),
-
-          // Upcoming Appointments Section
-          if (upcomingAppointments.isNotEmpty) ...[
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 15,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.schedule, color: Colors.green[600]),
-                      const SizedBox(width: 8),
-                      const Text(
-                        "Upcoming Appointments",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF6C5CE7),
-                        ),
+                // Header
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(25),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF6C5CE7), Color(0xFF74B9FF)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF6C5CE7)
+                            .withValues(alpha: 0.3),
+                        blurRadius: 15,
+                        offset: const Offset(0, 8),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  ...upcomingAppointments.map((appointment) => 
-                    _buildAppointmentCard(context, appointment, true)
-                  ).toList(),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-          ],
-
-          // Completed Appointments Section
-          if (completedAppointments.isNotEmpty) ...[
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 20),
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 15,
-                    offset: const Offset(0, 5),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.history, color: Colors.blue[600]),
-                      const SizedBox(width: 8),
-                      const Text(
-                        "Completed Appointments",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF6C5CE7),
-                        ),
-                      ),
+                      Text('Appointments',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold)),
+                      SizedBox(height: 8),
+                      Text('Manage your upcoming and past appointments',
+                          style: TextStyle(
+                              color: Colors.white70, fontSize: 14)),
                     ],
                   ),
-                  const SizedBox(height: 20),
-                  ...completedAppointments.map((appointment) => 
-                    _buildAppointmentCard(context, appointment, false)
-                  ).toList(),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-          ],
-
-          // Book New Appointment Button
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                _showBookAppointmentDialog(context);
-              },
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.all(20),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(15),
                 ),
-                backgroundColor: const Color(0xFF6C5CE7),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add, color: Colors.white),
-                  SizedBox(width: 10),
-                  Text(
-                    'Book New Appointment',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+
+                // Stats row
+                if (snap.connectionState != ConnectionState.waiting)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      children: [
+                        Expanded(
+                            child: _statCard('Upcoming',
+                                upcoming.length.toString(),
+                                Icons.schedule, Colors.green)),
+                        const SizedBox(width: 15),
+                        Expanded(
+                            child: _statCard('Past', past.length.toString(),
+                                Icons.history, Colors.blue)),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ),
-          ),
 
-          const SizedBox(height: 30),
+                const SizedBox(height: 20),
+
+                if (snap.connectionState == ConnectionState.waiting)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 40),
+                    child: Center(
+                        child: CircularProgressIndicator(
+                            color: Color(0xFF6C5CE7))),
+                  )
+                else if (docs.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 50),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          Icon(Icons.calendar_today,
+                              size: 56, color: Colors.grey[400]),
+                          const SizedBox(height: 14),
+                          Text('No appointments yet',
+                              style: TextStyle(
+                                  color: Colors.grey[500], fontSize: 15)),
+                          const SizedBox(height: 8),
+                          Text('Tap Book to schedule one',
+                              style: TextStyle(
+                                  color: Colors.grey[400], fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                  )
+                else ...[
+                  if (upcoming.isNotEmpty)
+                    _section(
+                      icon: Icons.schedule,
+                      iconColor: Colors.green[600]!,
+                      title: 'Upcoming',
+                      docs: upcoming,
+                    ),
+                  if (past.isNotEmpty)
+                    _section(
+                      icon: Icons.history,
+                      iconColor: Colors.blue[600]!,
+                      title: 'Past',
+                      docs: past,
+                    ),
+                ],
+
+                const SizedBox(height: 100),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _section({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required List<QueryDocumentSnapshot> docs,
+  }) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(icon, color: iconColor),
+            const SizedBox(width: 8),
+            Text('$title Appointments',
+                style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF6C5CE7))),
+          ]),
+          const SizedBox(height: 16),
+          ...docs.map((doc) {
+            final d = doc.data() as Map<String, dynamic>;
+            return _AppointmentCard(
+              data: d,
+              onEdit: () =>
+                  _showAppointmentSheet(existing: d, docId: doc.id),
+              onDelete: () => _deleteAppointment(doc.id),
+            );
+          }),
         ],
       ),
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  Widget _statCard(
+      String label, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(15),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
@@ -268,42 +367,57 @@ class PatientAppointments extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(icon, color: color, size: 30),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Icon(icon, color: color, size: 28),
+          const SizedBox(height: 8),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: color)),
+          Text(label,
+              style: const TextStyle(fontSize: 13, color: Colors.grey)),
         ],
       ),
     );
   }
+}
 
-  Widget _buildAppointmentCard(BuildContext context, Map<String, String> appointment, bool isUpcoming) {
-    Color statusColor = isUpcoming ? Colors.green : Colors.blue;
-    Color cardColor = isUpcoming ? Colors.green[50]! : Colors.blue[50]!;
-    Color borderColor = isUpcoming ? Colors.green[200]! : Colors.blue[200]!;
+// ─── Appointment card ─────────────────────────────────────────────────────────
+class _AppointmentCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _AppointmentCard(
+      {required this.data, required this.onEdit, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    final status = data['status'] as String? ?? 'Upcoming';
+    final isUpcoming = status == 'Upcoming';
+    final Color statusColor = isUpcoming
+        ? Colors.green
+        : status == 'Completed'
+            ? Colors.blue
+            : Colors.red;
+    final Color bg = isUpcoming
+        ? Colors.green[50]!
+        : status == 'Completed'
+            ? Colors.blue[50]!
+            : Colors.red[50]!;
+    final Color border = isUpcoming
+        ? Colors.green[200]!
+        : status == 'Completed'
+            ? Colors.blue[200]!
+            : Colors.red[200]!;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 15),
-      padding: const EdgeInsets.all(15),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: borderColor),
-      ),
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: border)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -312,230 +426,174 @@ class PatientAppointments extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: statusColor,
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                    color: statusColor,
+                    borderRadius: BorderRadius.circular(8)),
                 child: Icon(
-                  isUpcoming ? Icons.schedule : Icons.check_circle,
-                  color: Colors.white,
-                  size: 20,
-                ),
+                    isUpcoming ? Icons.schedule : Icons.check_circle,
+                    color: Colors.white,
+                    size: 18),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      appointment['doctor']!,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: statusColor,
-                      ),
-                    ),
-                    Text(
-                      appointment['hospital']!,
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 14,
-                      ),
-                    ),
+                    Text(data['doctor'] ?? '',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                            color: statusColor)),
+                    if ((data['hospital'] as String? ?? '').isNotEmpty)
+                      Text(data['hospital'],
+                          style: const TextStyle(
+                              color: Colors.grey, fontSize: 12)),
                   ],
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: statusColor,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  appointment['status']!,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                    color: statusColor,
+                    borderRadius: BorderRadius.circular(10)),
+                child: Text(status,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: const Icon(Icons.edit,
+                    size: 16, color: Color(0xFF6C5CE7)),
+                onPressed: onEdit,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                icon: Icon(Icons.delete, size: 16, color: Colors.red[400]),
+                onPressed: onDelete,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Icon(Icons.calendar_today, color: statusColor, size: 16),
-              const SizedBox(width: 8),
-              Text(
-                appointment['date']!,
+          const SizedBox(height: 10),
+          Row(children: [
+            Icon(Icons.calendar_today, color: statusColor, size: 14),
+            const SizedBox(width: 6),
+            Text(data['date'] ?? '',
                 style: TextStyle(
-                  color: statusColor,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(width: 20),
-              Icon(Icons.access_time, color: statusColor, size: 16),
-              const SizedBox(width: 8),
-              Text(
-                appointment['time']!,
-                style: TextStyle(
-                  color: statusColor,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                ),
-              ),
+                    color: statusColor,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13)),
+            if ((data['time'] as String? ?? '').isNotEmpty) ...[
+              const SizedBox(width: 16),
+              Icon(Icons.access_time, color: statusColor, size: 14),
+              const SizedBox(width: 6),
+              Text(data['time'],
+                  style: TextStyle(
+                      color: statusColor,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 13)),
             ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(Icons.medical_services, color: statusColor, size: 16),
-              const SizedBox(width: 8),
-              Text(
-                appointment['department']!,
-                style: TextStyle(
-                  color: statusColor,
-                  fontSize: 14,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Type: ${appointment['type']!}",
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.grey,
-            ),
-          ),
-          if (appointment['notes']!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              "Notes: ${appointment['notes']!}",
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
+          ]),
+          if ((data['department'] as String? ?? '').isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(children: [
+              Icon(Icons.medical_services, color: statusColor, size: 14),
+              const SizedBox(width: 6),
+              Text(data['department'],
+                  style: TextStyle(color: statusColor, fontSize: 13)),
+            ]),
           ],
-          if (isUpcoming) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      _showRescheduleDialog(context, appointment);
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: statusColor),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: Text(
-                      'Reschedule',
-                      style: TextStyle(color: statusColor),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      _showCancelDialog(context, appointment);
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.red),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Text(
-                      'Cancel',
-                      style: TextStyle(color: Colors.red),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+          if ((data['type'] as String? ?? '').isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text('Type: ${data['type']}',
+                style:
+                    const TextStyle(fontSize: 12, color: Colors.grey)),
+          ],
+          if ((data['notes'] as String? ?? '').isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text('Notes: ${data['notes']}',
+                style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                    fontStyle: FontStyle.italic)),
           ],
         ],
       ),
     );
   }
+}
 
-  void _showBookAppointmentDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Book New Appointment'),
-          content: const Text('This feature will be available soon. Please contact the hospital directly to book an appointment.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
+// ─── Reusable bottom sheet container ─────────────────────────────────────────
+class _BottomSheet extends StatelessWidget {
+  final String title;
+  final Widget child;
+
+  const _BottomSheet({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(4)),
+              ),
             ),
+            const SizedBox(height: 16),
+            Text(title,
+                style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF6C5CE7))),
+            const SizedBox(height: 20),
+            child,
           ],
-        );
-      },
+        ),
+      ),
     );
   }
+}
 
-  void _showRescheduleDialog(BuildContext context, Map<String, String> appointment) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Reschedule Appointment'),
-          content: Text('Reschedule appointment with ${appointment['doctor']} on ${appointment['date']}?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Reschedule feature coming soon!')),
-                );
-              },
-              child: const Text('Reschedule'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _showCancelDialog(BuildContext context, Map<String, String> appointment) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Cancel Appointment'),
-          content: Text('Are you sure you want to cancel your appointment with ${appointment['doctor']} on ${appointment['date']}?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('No'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Cancel feature coming soon!')),
-                );
-              },
-              child: const Text('Yes, Cancel', style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        );
-      },
-    );
-  }
+// ─── Field helper ─────────────────────────────────────────────────────────────
+Widget _field(TextEditingController c, String label, IconData icon) {
+  return TextField(
+    controller: c,
+    decoration: InputDecoration(
+      filled: true,
+      fillColor: const Color(0xFFF8F9FA),
+      contentPadding: const EdgeInsets.all(14),
+      labelText: label,
+      labelStyle: const TextStyle(color: Color(0xFF6C5CE7)),
+      prefixIcon: Icon(icon, color: const Color(0xFF6C5CE7)),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide:
+              const BorderSide(color: Color(0xFF6C5CE7), width: 2)),
+    ),
+  );
 }

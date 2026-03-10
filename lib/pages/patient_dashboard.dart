@@ -19,10 +19,11 @@ class PatientDashboard extends StatefulWidget {
 class _PatientDashboardState extends State<PatientDashboard> {
   int _selectedIndex = 0;
   String? userName;
+  String? _linkedPatientId;
 
-  final List<Widget> _pages = [
-    const PatientHome(),
-    const PatientPersonalDetails(),
+  List<Widget> get _pages => [
+    PatientHome(linkedPatientId: _linkedPatientId),
+    PatientPersonalDetails(linkedPatientId: _linkedPatientId),
     const PatientMedicinesAllergy(),
     const PatientCheckupsHistory(),
     const PatientAppointments(),
@@ -47,26 +48,60 @@ class _PatientDashboardState extends State<PatientDashboard> {
   Future<void> _fetchUserName() async {
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser != null) {
-        DocumentSnapshot userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(currentUser.uid)
-            .get();
+      if (currentUser == null) return;
 
-        if (userDoc.exists) {
-          Map<String, dynamic> userData = userDoc.data() as Map<String, dynamic>;
-          setState(() {
-            userName = userData['name'] ?? currentUser.email?.split('@')[0] ?? 'Patient';
-          });
-        } else {
-          setState(() {
-            userName = currentUser.email?.split('@')[0] ?? 'Patient';
-          });
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .get();
+
+      if (!mounted) return;
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() as Map<String, dynamic>;
+        final existingLink = userData['linkedPatientId'] as String?;
+
+        setState(() {
+          userName = userData['name'] as String? ??
+              currentUser.email?.split('@')[0] ??
+              'Patient';
+          _linkedPatientId = existingLink;
+        });
+
+        // If not yet linked, try to find a matching patients doc by email
+        if (existingLink == null || existingLink.isEmpty) {
+          _tryAutoLink(currentUser);
         }
+      } else {
+        setState(() {
+          userName = currentUser.email?.split('@')[0] ?? 'Patient';
+        });
+        _tryAutoLink(currentUser);
       }
-    } catch (e) {
-      print('Error fetching user name: $e');
-    }
+    } catch (_) {}
+  }
+
+  Future<void> _tryAutoLink(User currentUser) async {
+    try {
+      final email = currentUser.email;
+      if (email == null || email.isEmpty) return;
+
+      final query = await FirebaseFirestore.instance
+          .collection('patients')
+          .where('email', isEqualTo: email)
+          .limit(1)
+          .get();
+
+      if (query.docs.isEmpty) return;
+
+      final linkedId = query.docs.first.id;
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(currentUser.uid)
+          .update({'linkedPatientId': linkedId});
+
+      if (mounted) setState(() => _linkedPatientId = linkedId);
+    } catch (_) {}
   }
 
   @override
@@ -119,7 +154,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 10,
               offset: const Offset(0, -5),
             ),
@@ -342,7 +377,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
               onPressed: () async {
                 Navigator.of(context).pop();
                 await FirebaseAuth.instance.signOut();
-                Navigator.of(context).pushReplacementNamed('/auth');
+                if (context.mounted) Navigator.of(context).pushReplacementNamed('/auth');
               },
               child: const Text('Logout', style: TextStyle(color: Colors.red)),
             ),

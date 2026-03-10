@@ -125,9 +125,22 @@ class _AddPatientState extends State<AddPatient> {
       };
 
       // Save to Firebase
-      await FirebaseFirestore.instance
+      final newDocRef = await FirebaseFirestore.instance
           .collection('patients')
           .add(patientData);
+
+      // Back-link: if a patient account with this email already exists, link it
+      try {
+        final usersQuery = await FirebaseFirestore.instance
+            .collection('users')
+            .where('email', isEqualTo: email)
+            .limit(1)
+            .get();
+        if (usersQuery.docs.isNotEmpty) {
+          await usersQuery.docs.first.reference
+              .update({'linkedPatientId': newDocRef.id});
+        }
+      } catch (_) {}
 
       // Close loading dialog
       Navigator.of(context).pop();
