@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/material.dart';
 
 //import '../../components/background.dart';
 //import '../responsive.dart';
@@ -8,15 +7,11 @@ import 'package:flutter/material.dart';
 //import '../../../components/already_have_an_account_acheck.dart';
 //import '../../constants.dart';
 //import '../../Signup/signup_screen.dart';
-// import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-// import 'package:flutter/material.dart';
 //import 'package:flutterapp/pages/Screens/responsive.dart';
 //import '../../components/background.dart';
 //import 'components/login_form.dart';
 //import 'components/login_screen_top_image.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 
 
 class LoginForm extends StatelessWidget {
