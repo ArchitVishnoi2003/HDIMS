@@ -159,9 +159,11 @@ class _PatientProfileState extends State<PatientProfile> {
         );
       }),
     );
-    pin1Ctrl.dispose();
-    pin2Ctrl.dispose();
+    // Don't dispose controllers here — the bottom sheet exit animation is
+    // still running and its TextFields still reference them. They will be
+    // garbage-collected once the animation completes and all refs are released.
     if (pin == null || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
     setState(() => _privacyLoading = true);
     try {
       await EncryptionService.enablePrivacyMode(uid, pin as String);
@@ -170,16 +172,12 @@ class _PatientProfileState extends State<PatientProfile> {
           .collection('users')
           .doc(uid)
           .update({'privacyModeEnabled': true});
-      if (mounted) {
-        setState(() => _privacyModeEnabled = true);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Privacy Mode enabled. Records encrypted.')));
-      }
+      if (mounted) setState(() => _privacyModeEnabled = true);
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Privacy Mode enabled. Records encrypted.')));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error enabling Privacy Mode: $e')));
-      }
+      messenger.showSnackBar(
+          SnackBar(content: Text('Error enabling Privacy Mode: $e')));
     } finally {
       if (mounted) setState(() => _privacyLoading = false);
     }
@@ -210,8 +208,9 @@ class _PatientProfileState extends State<PatientProfile> {
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
 
+    final messenger = ScaffoldMessenger.of(context);
     setState(() => _privacyLoading = true);
     try {
       await EncryptionService.decryptAllRecords(uid);
@@ -220,16 +219,12 @@ class _PatientProfileState extends State<PatientProfile> {
           .collection('users')
           .doc(uid)
           .update({'privacyModeEnabled': false});
-      setState(() => _privacyModeEnabled = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text('Privacy Mode disabled. Records decrypted.')));
-      }
+      if (mounted) setState(() => _privacyModeEnabled = false);
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Privacy Mode disabled. Records decrypted.')));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error disabling Privacy Mode: $e')));
-      }
+      messenger.showSnackBar(
+          SnackBar(content: Text('Error disabling Privacy Mode: $e')));
     } finally {
       if (mounted) setState(() => _privacyLoading = false);
     }

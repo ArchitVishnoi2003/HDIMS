@@ -337,6 +337,8 @@ class _CheckupCard extends StatelessWidget {
                     children: [
                       Text(
                         data['disease'] ?? '',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 17,
@@ -344,6 +346,8 @@ class _CheckupCard extends StatelessWidget {
                       ),
                       Text(
                         data['date'] ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             color: Colors.grey, fontSize: 13),
                       ),
@@ -436,9 +440,13 @@ class _CheckupCard extends StatelessWidget {
                             Icon(Icons.medication,
                                 color: Colors.green[600], size: 16),
                             const SizedBox(width: 8),
-                            Text(m,
-                                style: TextStyle(
-                                    color: Colors.green[700], fontSize: 13)),
+                            Expanded(
+                              child: Text(m,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      color: Colors.green[700], fontSize: 13)),
+                            ),
                           ],
                         ),
                       )),
@@ -473,6 +481,8 @@ class _CheckupCard extends StatelessWidget {
           ),
           Expanded(
             child: Text(value ?? '',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     fontSize: 13, color: Colors.black54)),
           ),
@@ -501,6 +511,8 @@ class _CheckupCard extends StatelessWidget {
               textAlign: TextAlign.center),
           const SizedBox(height: 2),
           Text(value ?? '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.bold,

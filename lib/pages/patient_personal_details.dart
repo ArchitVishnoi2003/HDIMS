@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterapp/services/encryption_service.dart';
 
 const _kPrimary = Color(0xFF6C5CE7);
 const _kBg = Color(0xFFF8F9FA);
@@ -37,6 +39,10 @@ class _PatientPersonalDetailsState extends State<PatientPersonalDetails> {
   String? _email;
   String? _lastUpdated;
 
+  bool _privacyEnabled = false;
+  List<Map<String, dynamic>> _allergies = [];
+  StreamSubscription? _allergySub;
+
   User? get _user => FirebaseAuth.instance.currentUser;
 
   CollectionReference get _allergiesRef => FirebaseFirestore.instance
@@ -47,17 +53,78 @@ class _PatientPersonalDetailsState extends State<PatientPersonalDetails> {
   @override
   void initState() {
     super.initState();
+    _initPrivacy();
+  }
+
+  @override
+  void dispose() {
+    _allergySub?.cancel();
+    for (final c in [
+      _nameC, _ageC, _genderC, _phoneC, _addressC,
+      _weightC, _heightC, _bloodC,
+      _emergPhoneC, _emergRelC, _emergAddrC,
+      _insProvC, _insPolicyC, _insCoverC, _insValidC,
+    ]) { c.dispose(); }
+    super.dispose();
+  }
+
+  Future<void> _initPrivacy() async {
+    final uid = _user?.uid;
+    if (uid == null) return;
+    _privacyEnabled = await EncryptionService.isEnabled(uid);
+    _startAllergyListener();
     _loadData();
   }
 
+  void _startAllergyListener() {
+    final uid = _user?.uid;
+    if (uid == null) return;
+    _allergySub = _allergiesRef.orderBy('allergen').snapshots().listen((snap) async {
+      final decrypted = await Future.wait(snap.docs.map((d) async {
+        final raw = d.data() as Map<String, dynamic>;
+        final dec = _privacyEnabled
+            ? await EncryptionService.decryptMap(uid, raw)
+            : raw;
+        return {'id': d.id, ...dec};
+      }));
+      if (mounted) setState(() => _allergies = decrypted);
+    });
+  }
+
   Future<void> _loadData() async {
-    if (_user == null) return;
+    final uid = _user?.uid;
+    if (uid == null) return;
     final doc = await FirebaseFirestore.instance
         .collection('users')
-        .doc(_user!.uid)
+        .doc(uid)
         .get();
     if (!doc.exists || !mounted) return;
     final d = doc.data()!;
+
+    // Decrypt insurance fields + chronic conditions if privacy mode is on
+    String ins(String key) => d[key] as String? ?? '';
+    if (_privacyEnabled) {
+      final prov = await EncryptionService.decrypt(uid, ins('insuranceProvider'));
+      final pol = await EncryptionService.decrypt(uid, ins('policyNumber'));
+      final cov = await EncryptionService.decrypt(uid, ins('coverageType'));
+      final val = await EncryptionService.decrypt(uid, ins('validUntil'));
+      final rawConds = List<String>.from(d['chronicConditions'] as List? ?? []);
+      final decConds = await EncryptionService.decryptList(uid, rawConds);
+      if (!mounted) return;
+      _insProvC.text = prov;
+      _insPolicyC.text = pol;
+      _insCoverC.text = cov;
+      _insValidC.text = val;
+      _chronicConditions = decConds;
+    } else {
+      _insProvC.text = ins('insuranceProvider');
+      _insPolicyC.text = ins('policyNumber');
+      _insCoverC.text = ins('coverageType');
+      _insValidC.text = ins('validUntil');
+      _chronicConditions =
+          List<String>.from(d['chronicConditions'] as List? ?? []);
+    }
+
     setState(() {
       _email = d['email'] as String? ?? _user!.email ?? '';
       _nameC.text = d['name'] as String? ?? '';
@@ -71,12 +138,6 @@ class _PatientPersonalDetailsState extends State<PatientPersonalDetails> {
       _emergPhoneC.text = d['emergencyPhone'] as String? ?? '';
       _emergRelC.text = d['emergencyRelationship'] as String? ?? '';
       _emergAddrC.text = d['emergencyAddress'] as String? ?? '';
-      _insProvC.text = d['insuranceProvider'] as String? ?? '';
-      _insPolicyC.text = d['policyNumber'] as String? ?? '';
-      _insCoverC.text = d['coverageType'] as String? ?? '';
-      _insValidC.text = d['validUntil'] as String? ?? '';
-      _chronicConditions =
-          List<String>.from(d['chronicConditions'] as List? ?? []);
       final ts = d['updatedAt'] as Timestamp?;
       if (ts != null) {
         final dt = ts.toDate();
@@ -87,12 +148,28 @@ class _PatientPersonalDetailsState extends State<PatientPersonalDetails> {
   }
 
   Future<void> _saveData() async {
-    if (_user == null) return;
+    final uid = _user?.uid;
+    if (uid == null) return;
     setState(() => _isSaving = true);
     try {
+      // Encrypt sensitive fields if privacy mode is on
+      String insProv = _insProvC.text.trim();
+      String insPol = _insPolicyC.text.trim();
+      String insCov = _insCoverC.text.trim();
+      String insVal = _insValidC.text.trim();
+      List<String> conditions = List<String>.from(_chronicConditions);
+
+      if (_privacyEnabled) {
+        insProv = await EncryptionService.encrypt(uid, insProv);
+        insPol = await EncryptionService.encrypt(uid, insPol);
+        insCov = await EncryptionService.encrypt(uid, insCov);
+        insVal = await EncryptionService.encrypt(uid, insVal);
+        conditions = await EncryptionService.encryptList(uid, conditions);
+      }
+
       await FirebaseFirestore.instance
           .collection('users')
-          .doc(_user!.uid)
+          .doc(uid)
           .update({
         'name': _nameC.text.trim(),
         'age': _ageC.text.trim(),
@@ -105,11 +182,11 @@ class _PatientPersonalDetailsState extends State<PatientPersonalDetails> {
         'emergencyPhone': _emergPhoneC.text.trim(),
         'emergencyRelationship': _emergRelC.text.trim(),
         'emergencyAddress': _emergAddrC.text.trim(),
-        'insuranceProvider': _insProvC.text.trim(),
-        'policyNumber': _insPolicyC.text.trim(),
-        'coverageType': _insCoverC.text.trim(),
-        'validUntil': _insValidC.text.trim(),
-        'chronicConditions': _chronicConditions,
+        'insuranceProvider': insProv,
+        'policyNumber': insPol,
+        'coverageType': insCov,
+        'validUntil': insVal,
+        'chronicConditions': conditions,
         'updatedAt': FieldValue.serverTimestamp(),
       });
       final now = DateTime.now();
@@ -149,11 +226,15 @@ class _PatientPersonalDetailsState extends State<PatientPersonalDetails> {
           title: existing == null ? 'Add Allergy' : 'Edit Allergy',
           onSave: () async {
             if (allergenC.text.trim().isEmpty) return;
-            final data = <String, dynamic>{
+            var data = <String, dynamic>{
               'allergen': allergenC.text.trim(),
               'description': descC.text.trim(),
               'severity': severity,
             };
+            final uid = _user?.uid;
+            if (_privacyEnabled && uid != null) {
+              data = await EncryptionService.encryptMap(uid, data);
+            }
             if (existing == null) {
               data['createdAt'] = FieldValue.serverTimestamp();
               await _allergiesRef.add(data);
@@ -546,12 +627,15 @@ class _PatientPersonalDetailsState extends State<PatientPersonalDetails> {
           .where('fromDoctor', isEqualTo: true)
           .limit(1)
           .get();
-      final allergyData = {
+      var allergyData = <String, dynamic>{
         'allergen': 'Doctor-provided allergies',
         'description': allergiesText,
         'severity': 'Unknown',
         'fromDoctor': true,
       };
+      if (_privacyEnabled) {
+        allergyData = await EncryptionService.encryptMap(_user!.uid, allergyData);
+      }
       if (existing.docs.isNotEmpty) {
         await existing.docs.first.reference.update(allergyData);
       } else {
@@ -570,13 +654,16 @@ class _PatientPersonalDetailsState extends State<PatientPersonalDetails> {
           .where('fromDoctor', isEqualTo: true)
           .limit(1)
           .get();
-      final medData = {
+      var medData = <String, dynamic>{
         'name': 'Doctor-prescribed medications',
         'dosage': '',
         'frequency': '',
         'purpose': medsText,
         'fromDoctor': true,
       };
+      if (_privacyEnabled) {
+        medData = await EncryptionService.encryptMap(_user!.uid, medData);
+      }
       if (existing.docs.isNotEmpty) {
         await existing.docs.first.reference.update(medData);
       } else {
@@ -730,121 +817,114 @@ class _PatientPersonalDetailsState extends State<PatientPersonalDetails> {
                   ),
               ],
             ),
-            StreamBuilder<QuerySnapshot>(
-              stream:
-                  _allergiesRef.orderBy('allergen').snapshots(),
-              builder: (ctx, snap) {
-                if (snap.connectionState ==
-                    ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(12),
-                    child: Center(
-                        child: CircularProgressIndicator(
-                            color: _kPrimary, strokeWidth: 2)),
-                  );
-                }
-                final docs = snap.data?.docs ?? [];
-                if (docs.isEmpty) {
-                  return _emptyHint(_isEditing
-                      ? 'Tap + Add to record allergies'
-                      : 'No allergies recorded');
-                }
-                return Column(
-                  children: docs.map((doc) {
-                    final d =
-                        doc.data() as Map<String, dynamic>;
-                    final sev =
-                        d['severity'] as String? ?? 'High';
-                    final col = sev == 'High'
-                        ? Colors.red
-                        : sev == 'Medium'
-                            ? Colors.orange
-                            : Colors.green;
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: col.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                            color: col.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.warning_amber_rounded,
-                              color: col, size: 18),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                              children: [
+            if (_allergies.isEmpty)
+              _emptyHint(_isEditing
+                  ? 'Tap + Add to record allergies'
+                  : 'No allergies recorded')
+            else
+              Column(
+                children: _allergies.map((d) {
+                  final sev =
+                      d['severity'] as String? ?? 'High';
+                  final col = sev.toLowerCase() == 'high'
+                      ? Colors.red
+                      : sev.toLowerCase() == 'medium'
+                          ? Colors.orange
+                          : Colors.green;
+                  final docId = d['id'] as String;
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: col.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: col.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded,
+                            color: col, size: 18),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                  d['allergen'] as String? ??
+                                      '',
+                                  style: TextStyle(
+                                      fontWeight:
+                                          FontWeight.bold,
+                                      color: col,
+                                      fontSize: 14),
+                                  maxLines: 2,
+                                  overflow:
+                                      TextOverflow.ellipsis),
+                              if ((d['description']
+                                          as String?)
+                                      ?.isNotEmpty ==
+                                  true)
                                 Text(
-                                    d['allergen'] as String? ??
-                                        '',
+                                    d['description']
+                                        as String,
                                     style: TextStyle(
-                                        fontWeight:
-                                            FontWeight.bold,
                                         color: col,
-                                        fontSize: 14)),
-                                if ((d['description']
-                                            as String?)
-                                        ?.isNotEmpty ==
-                                    true)
-                                  Text(
-                                      d['description']
-                                          as String,
-                                      style: TextStyle(
-                                          color: col,
-                                          fontSize: 12)),
-                              ],
-                            ),
+                                        fontSize: 12),
+                                    maxLines: 2,
+                                    overflow:
+                                        TextOverflow.ellipsis),
+                            ],
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                                color: col,
-                                borderRadius:
-                                    BorderRadius.circular(8)),
-                            child: Text(sev,
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight:
-                                        FontWeight.bold)),
+                        ),
+                        Container(
+                          constraints: const BoxConstraints(
+                              maxWidth: 70),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                              color: col,
+                              borderRadius:
+                                  BorderRadius.circular(8)),
+                          child: Text(sev,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight:
+                                      FontWeight.bold),
+                              overflow:
+                                  TextOverflow.ellipsis),
+                        ),
+                        if (_isEditing) ...[
+                          const SizedBox(width: 4),
+                          IconButton(
+                            icon: Icon(Icons.edit,
+                                color: col, size: 18),
+                            padding: EdgeInsets.zero,
+                            constraints:
+                                const BoxConstraints(),
+                            onPressed: () =>
+                                _showAddAllergySheet(
+                                    existing: d,
+                                    docId: docId),
                           ),
-                          if (_isEditing) ...[
-                            const SizedBox(width: 4),
-                            IconButton(
-                              icon: Icon(Icons.edit,
-                                  color: col, size: 18),
-                              padding: EdgeInsets.zero,
-                              constraints:
-                                  const BoxConstraints(),
-                              onPressed: () =>
-                                  _showAddAllergySheet(
-                                      existing: d,
-                                      docId: doc.id),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close,
-                                  color: Colors.red, size: 18),
-                              padding: EdgeInsets.zero,
-                              constraints:
-                                  const BoxConstraints(),
-                              onPressed: () =>
-                                  _deleteAllergy(doc.id),
-                            ),
-                          ],
+                          IconButton(
+                            icon: const Icon(Icons.close,
+                                color: Colors.red, size: 18),
+                            padding: EdgeInsets.zero,
+                            constraints:
+                                const BoxConstraints(),
+                            onPressed: () =>
+                                _deleteAllergy(docId),
+                          ),
                         ],
-                      ),
-                    );
-                  }).toList(),
-                );
-              },
-            ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
           ],
         ),
       );
@@ -942,16 +1022,6 @@ class _PatientPersonalDetailsState extends State<PatientPersonalDetails> {
                 const TextStyle(color: Colors.grey, fontSize: 13)),
       );
 
-  @override
-  void dispose() {
-    for (final c in [
-      _nameC, _ageC, _genderC, _phoneC, _addressC,
-      _weightC, _heightC, _bloodC,
-      _emergPhoneC, _emergRelC, _emergAddrC,
-      _insProvC, _insPolicyC, _insCoverC, _insValidC,
-    ]) { c.dispose(); }
-    super.dispose();
-  }
 }
 
 // ── Reusable form helpers ─────────────────────────────────────────────────────

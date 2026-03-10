@@ -548,27 +548,36 @@ class _AllergyCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(allergen,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 15,
                               color: Colors.red[700])),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                          color: c, borderRadius: BorderRadius.circular(10)),
-                      child: Text(severity,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold)),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 80),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                            color: c, borderRadius: BorderRadius.circular(10)),
+                        child: Text(severity,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold)),
+                      ),
                     ),
                   ],
                 ),
                 if (description.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           color: Colors.red[600], fontSize: 13)),
                 ],
@@ -635,6 +644,8 @@ class _MedicationCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
@@ -642,16 +653,22 @@ class _MedicationCard extends StatelessWidget {
                 const SizedBox(height: 6),
                 if (dosage.isNotEmpty || frequency.isNotEmpty)
                   Text('${dosage.isNotEmpty ? dosage : '—'}  •  ${frequency.isNotEmpty ? frequency : '—'}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 13)),
                 if (purpose.isNotEmpty) ...[
                   const SizedBox(height: 3),
                   Text('Purpose: $purpose',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           fontSize: 13, color: Colors.grey[700])),
                 ],
                 if (startDate.isNotEmpty) ...[
                   const SizedBox(height: 3),
                   Text('Started: $startDate',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                           fontSize: 12, color: Colors.grey[500])),
                 ],

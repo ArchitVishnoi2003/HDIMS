@@ -440,28 +440,37 @@ class _AppointmentCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(data['doctor'] ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
                             color: statusColor)),
                     if ((data['hospital'] as String? ?? '').isNotEmpty)
                       Text(data['hospital'],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                               color: Colors.grey, fontSize: 12)),
                   ],
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                    color: statusColor,
-                    borderRadius: BorderRadius.circular(10)),
-                child: Text(status,
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold)),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 80),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                      color: statusColor,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Text(status,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold)),
+                ),
               ),
               const SizedBox(width: 4),
               IconButton(
@@ -484,20 +493,28 @@ class _AppointmentCard extends StatelessWidget {
           Row(children: [
             Icon(Icons.calendar_today, color: statusColor, size: 14),
             const SizedBox(width: 6),
-            Text(data['date'] ?? '',
-                style: TextStyle(
-                    color: statusColor,
-                    fontWeight: FontWeight.w500,
-                    fontSize: 13)),
-            if ((data['time'] as String? ?? '').isNotEmpty) ...[
-              const SizedBox(width: 16),
-              Icon(Icons.access_time, color: statusColor, size: 14),
-              const SizedBox(width: 6),
-              Text(data['time'],
+            Flexible(
+              child: Text(data['date'] ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       color: statusColor,
                       fontWeight: FontWeight.w500,
                       fontSize: 13)),
+            ),
+            if ((data['time'] as String? ?? '').isNotEmpty) ...[
+              const SizedBox(width: 16),
+              Icon(Icons.access_time, color: statusColor, size: 14),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(data['time'],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        color: statusColor,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13)),
+              ),
             ],
           ]),
           if ((data['department'] as String? ?? '').isNotEmpty) ...[
@@ -505,19 +522,27 @@ class _AppointmentCard extends StatelessWidget {
             Row(children: [
               Icon(Icons.medical_services, color: statusColor, size: 14),
               const SizedBox(width: 6),
-              Text(data['department'],
-                  style: TextStyle(color: statusColor, fontSize: 13)),
+              Flexible(
+                child: Text(data['department'],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: statusColor, fontSize: 13)),
+              ),
             ]),
           ],
           if ((data['type'] as String? ?? '').isNotEmpty) ...[
             const SizedBox(height: 4),
             Text('Type: ${data['type']}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style:
                     const TextStyle(fontSize: 12, color: Colors.grey)),
           ],
           if ((data['notes'] as String? ?? '').isNotEmpty) ...[
             const SizedBox(height: 4),
             Text('Notes: ${data['notes']}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                     fontSize: 12,
                     color: Colors.grey,

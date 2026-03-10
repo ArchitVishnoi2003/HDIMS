@@ -119,6 +119,16 @@ class EncryptionService {
   static Future<void> decryptAllRecords(String uid) =>
       _bulkTransform(uid, doEncrypt: false);
 
+  // ── List helpers ──────────────────────────────────────────────────────────
+
+  static Future<List<String>> encryptList(String uid, List<String> items) =>
+      Future.wait(items.map((s) => encrypt(uid, s)));
+
+  static Future<List<String>> decryptList(String uid, List<String> items) =>
+      Future.wait(items.map((s) => decrypt(uid, s)));
+
+  // ── Bulk transform subcollections + user-doc fields ─────────────────────
+
   static Future<void> _bulkTransform(String uid,
       {required bool doEncrypt}) async {
     const subs = ['medications', 'allergies', 'checkups', 'appointments'];
@@ -133,5 +143,44 @@ class EncryptionService {
         await doc.reference.update(transformed);
       }
     }
+
+    // Also encrypt/decrypt sensitive user-doc fields
+    final userRef = db.collection('users').doc(uid);
+    final userDoc = await userRef.get();
+    if (!userDoc.exists) return;
+    final data = userDoc.data()!;
+    final updates = <String, dynamic>{};
+
+    // Insurance string fields
+    for (final f in [
+      'insuranceProvider', 'policyNumber', 'coverageType', 'validUntil'
+    ]) {
+      final val = data[f] as String?;
+      if (val == null || val.isEmpty) continue;
+      if (doEncrypt && !val.startsWith(_prefix)) {
+        updates[f] = await encrypt(uid, val);
+      } else if (!doEncrypt && val.startsWith(_prefix)) {
+        updates[f] = await decrypt(uid, val);
+      }
+    }
+
+    // Chronic conditions list
+    final conditions =
+        List<String>.from(data['chronicConditions'] as List? ?? []);
+    if (conditions.isNotEmpty) {
+      final transformed = <String>[];
+      for (final c in conditions) {
+        if (doEncrypt && !c.startsWith(_prefix)) {
+          transformed.add(await encrypt(uid, c));
+        } else if (!doEncrypt && c.startsWith(_prefix)) {
+          transformed.add(await decrypt(uid, c));
+        } else {
+          transformed.add(c);
+        }
+      }
+      updates['chronicConditions'] = transformed;
+    }
+
+    if (updates.isNotEmpty) await userRef.update(updates);
   }
 }
