@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutterapp/pages/ad_patient.dart';
 import 'package:flutterapp/pages/update_patient.dart';
+import 'package:flutterapp/pages/delete_patient.dart';
+import 'package:flutterapp/pages/view_patient.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});
@@ -42,184 +44,322 @@ class _DashboardState extends State<Dashboard> {
 
   @override
   Widget build(BuildContext context) {
-    final double varHeight = MediaQuery.of(context).size.height;
-    final double varWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8F9FA),
       drawer: Drawer(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(
-                color: Colors.blue,
-              ),
-              child: Text(
-                'Menu',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
+            DrawerHeader(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF6C5CE7), Color(0xFF74B9FF)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  CircleAvatar(
+                    radius: 30,
+                    backgroundColor: Colors.white,
+                    child: Text(
+                      userName?.substring(0, 1).toUpperCase() ?? 'U',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF6C5CE7),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    userName ?? 'User',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    'Chennai',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.exit_to_app),
-              title: const Text('Sign Out'),
+              leading: const Icon(Icons.home, color: Color(0xFF6C5CE7)),
+              title: const Text('Dashboard'),
+              onTap: () => Navigator.of(context).pop(),
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_add, color: Color(0xFF6C5CE7)),
+              title: const Text('Add Patient'),
               onTap: () {
-                //temporarily it is "signout" kept unassigned
-                Navigator.of(context).pop(); // Close the drawer
-                
+                Navigator.of(context).pop();
+                Navigator.push(context, MaterialPageRoute(builder: (context) {
+                  return const AddPatient();
+                }));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit, color: Color(0xFF6C5CE7)),
+              title: const Text('Update Patient'),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.push(context, MaterialPageRoute(builder: (context) {
+                  return const UpdatePatient();
+                }));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text('Delete Patient'),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.push(context, MaterialPageRoute(builder: (context) {
+                  return const DeletePatient();
+                }));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.visibility, color: Color(0xFF6C5CE7)),
+              title: const Text('View Patients'),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.push(context, MaterialPageRoute(builder: (context) {
+                  return const ViewPatient();
+                }));
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.exit_to_app, color: Colors.red),
+              title: const Text('Sign Out'),
+              onTap: () async {
+                try {
+                  await FirebaseAuth.instance.signOut();
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pushReplacementNamed('/');
+                } catch (e) {
+                  print('Error signing out: $e');
+                }
               },
             ),
           ],
         ),
       ),
-      body: Stack(
-        children: [
-          Positioned(
-            top: 40, 
-            left: 30, 
-            child: Builder(
-              builder: (context) => GestureDetector(
-                onTap: () {
-                  Scaffold.of(context).openDrawer(); 
-                },
-                child: Image.asset(
-                  'lib/assets/guy1.png',
-                  width: 70, 
-                  height: 70,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header section
+                Row(
+                  children: [
+                    Builder(
+                      builder: (context) => GestureDetector(
+                        onTap: () {
+                          Scaffold.of(context).openDrawer(); 
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(15),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 10,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.menu,
+                            color: Color(0xFF6C5CE7),
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF6C5CE7), Color(0xFF74B9FF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(25),
+                      ),
+                      child: const Text(
+                        "HDIMS Health",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
+                
+                const SizedBox(height: 30),
+                
+                // Welcome section
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(25),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF6C5CE7), Color(0xFF74B9FF)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(25),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF6C5CE7).withOpacity(0.3),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "Welcome Back!",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        userName ?? 'Loading...',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        "Manage your patients efficiently",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 30),
+                
+                // Menu options
+                GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 20,
+                  mainAxisSpacing: 20,
+                  childAspectRatio: 1.2,
+                  children: [
+                    _buildMenuCard(
+                      context,
+                      'Add Patient',
+                      Icons.person_add,
+                      const Color(0xFFF2BEF8),
+                      () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AddPatient())),
+                    ),
+                    _buildMenuCard(
+                      context,
+                      'Update Patient',
+                      Icons.edit,
+                      const Color(0xFFAAE9E4),
+                      () => Navigator.push(context, MaterialPageRoute(builder: (context) => const UpdatePatient())),
+                    ),
+                    _buildMenuCard(
+                      context,
+                      'Delete Patient',
+                      Icons.delete,
+                      const Color(0xFFF1ABB1),
+                      () => Navigator.push(context, MaterialPageRoute(builder: (context) => const DeletePatient())),
+                    ),
+                    _buildMenuCard(
+                      context,
+                      'View Patients',
+                      Icons.visibility,
+                      const Color(0xFFF1E4AB),
+                      () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ViewPatient())),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 30),
+              ],
             ),
           ),
-          // Displaying the user's name below the icon
-          Positioned(
-            top: 130, 
-            left: 20,
-            child: Text(
-              userName != null ? ' $userName\n Chennai' : 'Fetching name...',
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMenuCard(BuildContext context, String title, IconData icon, Color color, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 15,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(50),
+              ),
+              child: Icon(
+                icon,
+                size: 30,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 15),
+            Text(
+              title,
               style: const TextStyle(
-                fontSize: 28,
+                fontSize: 16,
                 fontWeight: FontWeight.bold,
+                color: Colors.black87,
               ),
+              textAlign: TextAlign.center,
             ),
-          ),
-          Column(
-            children: [
-              const SizedBox(
-                height: 250,
-                child: Padding(
-                  padding: EdgeInsets.only(left: 250, top: 40),
-                  child: Text(
-                    "Helth-ledger",
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) {
-                    return const AddPatient();
-                  }));
-                },
-                child: Center(
-                  child: Container(
-                    height: varHeight * 0.16,
-                    width: varWidth * 0.9,
-                    decoration: BoxDecoration(
-                      color: const Color(0xffF2BEF8),
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: const Padding(
-                      padding: EdgeInsets.only(left: 30, top: 50),
-                      child: Text(
-                        "Add Patient",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) {
-                    return const UpdatePatient();
-                  }));
-                },
-                child: Center(
-                  child: Container(
-                    height: varHeight * 0.16,
-                    width: varWidth * 0.9,
-                    decoration: BoxDecoration(
-                      color: const Color(0xffAAE9E4),
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    child: const Padding(
-                      padding: EdgeInsets.only(left: 30, top: 50),
-                      child: Text(
-                        "Update Patient",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Center(
-                child: Container(
-                  height: varHeight * 0.16,
-                  width: varWidth * 0.9,
-                  decoration: BoxDecoration(
-                    color: const Color(0xffF1ABB1),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: const Padding(
-                    padding: EdgeInsets.only(left: 30, top: 50),
-                    child: Text(
-                      "Delete Patient",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Center(
-                child: Container(
-                  height: varHeight * 0.16,
-                  width: varWidth * 0.9,
-                  decoration: BoxDecoration(
-                    color: const Color(0xffF1E4AB),
-                    borderRadius: BorderRadius.circular(30),
-                  ),
-                  child: const Padding(
-                    padding: EdgeInsets.only(left: 30, top: 50),
-                    child: Text(
-                      "View Patient",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

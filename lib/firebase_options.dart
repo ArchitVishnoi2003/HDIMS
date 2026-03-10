@@ -41,46 +41,47 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDUMbzYV6d-Jjh2L-Wauus7ymi2MH_4fRo',
-    appId: '1:964454806711:web:c9ede0ca28a114a1ab0932',
-    messagingSenderId: '964454806711',
-    projectId: 'hdims-699e0',
-    authDomain: 'hdims-699e0.firebaseapp.com',
-    storageBucket: 'hdims-699e0.firebasestorage.app',
+    apiKey: 'AIzaSyCHJpkKEJ8Uw2FcPwzQqUf5ZEzjRweDQ8Y',
+    appId: '1:784503341281:web:0ce9d44f49e423043b37a0',
+    messagingSenderId: '784503341281',
+    projectId: 'hdimrs',
+    authDomain: 'hdimrs.firebaseapp.com',
+    storageBucket: 'hdimrs.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCuTBSxTIzQcUa3_5ED7uiHOzWI_cf8uH4',
-    appId: '1:964454806711:android:702027561d0de715ab0932',
-    messagingSenderId: '964454806711',
-    projectId: 'hdims-699e0',
-    storageBucket: 'hdims-699e0.firebasestorage.app',
+    apiKey: 'AIzaSyB8jygf_QIrzPtd9uWUcwkUD_6IST1TixU',
+    appId: '1:784503341281:android:c81727639de933f33b37a0',
+    messagingSenderId: '784503341281',
+    projectId: 'hdimrs',
+    storageBucket: 'hdimrs.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDfzokaYiR4mFZ3ux9AmCK_COf97UvSDxY',
-    appId: '1:964454806711:ios:df9e2668fd159595ab0932',
-    messagingSenderId: '964454806711',
-    projectId: 'hdims-699e0',
-    storageBucket: 'hdims-699e0.firebasestorage.app',
-    iosBundleId: 'com.example.flutterapp',
+    apiKey: 'AIzaSyDBOo5HylIQ-GP_xuYIQ-wZHywrIIrEBiw',
+    appId: '1:784503341281:ios:5d8b9625626f838b3b37a0',
+    messagingSenderId: '784503341281',
+    projectId: 'hdimrs',
+    storageBucket: 'hdimrs.firebasestorage.app',
+    iosBundleId: 'com.example.hdimss',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyDfzokaYiR4mFZ3ux9AmCK_COf97UvSDxY',
-    appId: '1:964454806711:ios:df9e2668fd159595ab0932',
-    messagingSenderId: '964454806711',
-    projectId: 'hdims-699e0',
-    storageBucket: 'hdims-699e0.firebasestorage.app',
-    iosBundleId: 'com.example.flutterapp',
+    apiKey: 'AIzaSyDBOo5HylIQ-GP_xuYIQ-wZHywrIIrEBiw',
+    appId: '1:784503341281:ios:5d8b9625626f838b3b37a0',
+    messagingSenderId: '784503341281',
+    projectId: 'hdimrs',
+    storageBucket: 'hdimrs.firebasestorage.app',
+    iosBundleId: 'com.example.hdimss',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyDUMbzYV6d-Jjh2L-Wauus7ymi2MH_4fRo',
-    appId: '1:964454806711:web:09b7ee349543f0dcab0932',
-    messagingSenderId: '964454806711',
-    projectId: 'hdims-699e0',
-    authDomain: 'hdims-699e0.firebaseapp.com',
-    storageBucket: 'hdims-699e0.firebasestorage.app',
+    apiKey: 'AIzaSyCHJpkKEJ8Uw2FcPwzQqUf5ZEzjRweDQ8Y',
+    appId: '1:784503341281:web:20595728d3435d193b37a0',
+    messagingSenderId: '784503341281',
+    projectId: 'hdimrs',
+    authDomain: 'hdimrs.firebaseapp.com',
+    storageBucket: 'hdimrs.firebasestorage.app',
   );
+
 }
