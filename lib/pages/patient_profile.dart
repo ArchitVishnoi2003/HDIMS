@@ -47,7 +47,7 @@ class _PatientProfileState extends State<PatientProfile> {
     final pin2Ctrl = TextEditingController();
     String? error;
 
-    await showModalBottomSheet(
+    final pin = await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -158,32 +158,31 @@ class _PatientProfileState extends State<PatientProfile> {
           ),
         );
       }),
-    ).then((pin) async {
-      pin1Ctrl.dispose();
-      pin2Ctrl.dispose();
-      if (pin == null) return;
-      setState(() => _privacyLoading = true);
-      try {
-        await EncryptionService.enablePrivacyMode(uid, pin as String);
-        await EncryptionService.encryptAllRecords(uid);
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(uid)
-            .update({'privacyModeEnabled': true});
+    );
+    pin1Ctrl.dispose();
+    pin2Ctrl.dispose();
+    if (pin == null || !mounted) return;
+    setState(() => _privacyLoading = true);
+    try {
+      await EncryptionService.enablePrivacyMode(uid, pin as String);
+      await EncryptionService.encryptAllRecords(uid);
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .update({'privacyModeEnabled': true});
+      if (mounted) {
         setState(() => _privacyModeEnabled = true);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Privacy Mode enabled. Records encrypted.')));
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error enabling Privacy Mode: $e')));
-        }
-      } finally {
-        if (mounted) setState(() => _privacyLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Privacy Mode enabled. Records encrypted.')));
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error enabling Privacy Mode: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _privacyLoading = false);
+    }
   }
 
   Future<void> _disablePrivacyMode() async {
