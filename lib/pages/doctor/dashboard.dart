@@ -1,10 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutterapp/pages/ad_patient.dart';
-import 'package:flutterapp/pages/update_patient.dart';
-import 'package:flutterapp/pages/delete_patient.dart';
-import 'package:flutterapp/pages/view_patient.dart';
+import 'ad_patient.dart';
+import 'update_patient.dart';
+import 'delete_patient.dart';
+import 'view_patient.dart';
 
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key});

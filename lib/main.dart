@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutterapp/pages/dashboard.dart';
-import 'package:flutterapp/pages/patient_dashboard.dart';
-import 'package:flutterapp/pages/user_type_selection.dart';
+import 'package:flutterapp/pages/doctor/dashboard.dart';
+import 'package:flutterapp/pages/patient/patient_dashboard.dart';
+import 'package:flutterapp/pages/auth/user_type_selection.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutterapp/pages/signup_page.dart';
+import 'package:flutterapp/pages/auth/signup_page.dart';
 import 'firebase_options.dart';
-import 'package:flutterapp/pages/ask_diet_plan.dart';
-import 'package:flutterapp/pages/consent_screen.dart';
+import 'package:flutterapp/pages/patient/ask_diet_plan.dart';
+import 'package:flutterapp/pages/auth/consent_screen.dart';
 
 
 void main()async{

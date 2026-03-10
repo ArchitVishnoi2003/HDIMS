@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'dashboard.dart';
-import 'patient_dashboard.dart';
+import 'package:flutterapp/pages/doctor/dashboard.dart';
+import 'package:flutterapp/pages/patient/patient_dashboard.dart';
 
 class UserTypeSelection extends StatefulWidget {
   const UserTypeSelection({super.key});

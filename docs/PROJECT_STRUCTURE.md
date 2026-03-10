@@ -27,38 +27,42 @@ hdimss/
 │   │   └── access_request_service.dart  # Doctor→Patient access request + session + enrichment
 │   │
 │   └── pages/
-│       ├── signup_page.dart         # Login / Sign-up screen (HomeScreen) + privacy consent modal
-│       ├── login_form.dart          # Legacy login components (partially unused)
-│       ├── user_type_selection.dart  # Screen shown when userType is missing
-│       ├── consent_screen.dart      # Full-screen privacy consent for legacy accounts
+│       ├── auth/                          # Authentication & onboarding
+│       │   ├── signup_page.dart           # Login / Sign-up screen (HomeScreen) + privacy consent modal
+│       │   ├── login_form.dart            # Legacy login components (partially unused)
+│       │   ├── auth.dart                  # Auth utilities
+│       │   ├── user_type_selection.dart   # Screen shown when userType is missing
+│       │   ├── consent_screen.dart        # Full-screen privacy consent for legacy accounts
+│       │   └── save_email.dart            # Email save utility
 │       │
-│       ├── ── DOCTOR SIDE ──
-│       ├── dashboard.dart           # Doctor home: 2×2 grid (Add/Update/Delete/View) + drawer
-│       ├── ad_patient.dart          # Add patient form → patients/{docId}
-│       ├── view_patient.dart        # List + search patients; enriched data; access requests; view decrypted records
-│       ├── update_patient.dart      # Thin wrapper → SelectPatientToUpdate
-│       ├── select_patient_to_update.dart  # Patient picker; access-gated editing
-│       ├── edit_patient_details.dart      # Full patient edit form; syncs to users collection
-│       └── delete_patient.dart      # Patient list with delete confirmation; enriched data
+│       ├── doctor/                        # Doctor / hospital side
+│       │   ├── dashboard.dart             # Doctor home: 2×2 grid (Add/Update/Delete/View) + drawer
+│       │   ├── ad_patient.dart            # Add patient form → patients/{docId}
+│       │   ├── view_patient.dart          # List + search patients; enriched data; access requests; view decrypted records
+│       │   ├── update_patient.dart        # Thin wrapper → SelectPatientToUpdate
+│       │   ├── select_patient_to_update.dart  # Patient picker; access-gated editing
+│       │   ├── edit_patient_details.dart  # Full patient edit form; syncs to users collection
+│       │   └── delete_patient.dart        # Patient list with delete confirmation; enriched data
 │       │
-│       ├── ── PATIENT SIDE ──
-│       ├── patient_dashboard.dart   # Bottom nav (6 tabs) + drawer + access-request banner + shield icon
-│       ├── patient_home.dart        # Overview / welcome page (tab 0)
-│       ├── patient_personal_details.dart  # Name, contact, address linked from patients doc (tab 1)
-│       ├── patient_medicines_allergy.dart # Medications + allergies CRUD; encrypted writes (tab 2)
-│       ├── patient_checkups_history.dart  # Checkup history CRUD; encrypted writes (tab 3)
-│       ├── patient_appointments.dart      # Appointments CRUD; encrypted writes (tab 4)
-│       ├── patient_routine.dart     # Daily routine management (tab 5)
-│       ├── patient_profile.dart     # Profile edit only (name, phone, address, age, blood group)
-│       ├── patient_privacy_security.dart  # Privacy Mode toggle + access requests + session management
-│       └── ask_diet_plan.dart       # AI health/diet chat powered by Gemini
+│       └── patient/                       # Patient side
+│           ├── patient_dashboard.dart     # Bottom nav (6 tabs) + drawer + access-request banner + shield icon
+│           ├── patient_home.dart          # Overview / welcome page (tab 0)
+│           ├── patient_personal_details.dart  # Name, contact, address linked from patients doc (tab 1)
+│           ├── patient_medicines_allergy.dart # Medications + allergies CRUD; encrypted writes (tab 2)
+│           ├── patient_checkups_history.dart  # Checkup history CRUD; encrypted writes (tab 3)
+│           ├── patient_appointments.dart  # Appointments CRUD; encrypted writes (tab 4)
+│           ├── patient_routine.dart       # Daily routine management (tab 5)
+│           ├── patient_profile.dart       # Profile edit only (name, phone, address, age, blood group)
+│           ├── patient_privacy_security.dart  # Privacy Mode toggle + access requests + session management
+│           └── ask_diet_plan.dart         # AI health/diet chat powered by Gemini
 │
 ├── docs/                            # Project documentation (this folder)
 │   ├── PROJECT_OVERVIEW.md
 │   ├── PROJECT_STRUCTURE.md
 │   ├── FEATURES.md
 │   ├── TECH_STACK.md
-│   └── HOW_TO_USE.md
+│   ├── HOW_TO_USE.md
+│   └── DB_STRUCTURE.md
 │
 ├── firebase.json                    # Firebase CLI config
 ├── pubspec.yaml                     # Flutter dependencies and asset declarations
