@@ -1,4 +1,4 @@
-# HDIMSS — Firestore Database Structure
+# HDIMS — Firestore Database Structure
 
 ## Collections Overview
 

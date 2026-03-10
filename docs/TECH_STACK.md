@@ -1,4 +1,4 @@
-# HDIMSS — Tech Stack & Architecture
+# HDIMS — Tech Stack & Architecture
 
 ## Core Technologies
 

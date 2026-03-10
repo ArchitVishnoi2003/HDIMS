@@ -107,7 +107,7 @@ class _ConsentScreenState extends State<ConsentScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _section('1. What We Collect',
-                          'HDIMSS collects personal and health information including your name, email address, contact details, medical history, allergies, medications, appointment records, vital signs, and AI-generated health recommendations. This information is collected when you create an account or enter records in the app.'),
+                          'HDIMS collects personal and health information including your name, email address, contact details, medical history, allergies, medications, appointment records, vital signs, and AI-generated health recommendations. This information is collected when you create an account or enter records in the app.'),
                       _section('2. How We Use Your Data',
                           'Your data is used solely to provide health record management features, to allow authorized healthcare providers to view your records, and to personalize AI-driven health recommendations. We do not sell, rent, or share your personal information with third parties for marketing purposes.'),
                       _section('3. Data Storage & Security',

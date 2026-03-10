@@ -1,4 +1,4 @@
-# HDIMSS — Project Structure
+# HDIMS — Project Structure
 
 ```
 hdimss/

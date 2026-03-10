@@ -1,4 +1,4 @@
-# HDIMSS — Features
+# HDIMS — Features
 
 ## Doctor / Hospital Features
 

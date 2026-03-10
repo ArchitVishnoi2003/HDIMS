@@ -1,8 +1,8 @@
-# HDIMSS — Project Overview & Use Case
+# HDIMS — Project Overview & Use Case
 
-## What is HDIMSS?
+## What is HDIMS?
 
-**HDIMSS** (Health Data Information Management & Security System) is a cross-platform mobile application built with Flutter that provides a unified, secure platform for managing patient health records. It bridges the gap between healthcare providers (doctors/hospitals) and their patients by centralising medical data in a single, access-controlled system.
+**HDIMS** (Health Data Information Management & Security System) is a cross-platform mobile application built with Flutter that provides a unified, secure platform for managing patient health records. It bridges the gap between healthcare providers (doctors/hospitals) and their patients by centralising medical data in a single, access-controlled system.
 
 ---
 
@@ -16,7 +16,7 @@ Managing health records in most clinical settings involves:
 - No audit trail when records are accessed or modified
 - No patient consent mechanism before sensitive data is shared
 
-HDIMSS addresses all of the above with a digital-first, privacy-by-design approach.
+HDIMS addresses all of the above with a digital-first, privacy-by-design approach.
 
 ---
 

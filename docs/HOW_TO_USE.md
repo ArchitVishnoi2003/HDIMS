@@ -1,4 +1,4 @@
-# HDIMSS — How to Use
+# HDIMS — How to Use
 
 ## Prerequisites
 
