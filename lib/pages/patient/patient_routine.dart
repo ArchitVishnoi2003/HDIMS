@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterapp/data/gemini_service.dart';
+import 'package:flutterapp/services/encryption_service.dart';
 
 class PatientRoutine extends StatefulWidget {
   const PatientRoutine({super.key});
@@ -12,6 +16,7 @@ class PatientRoutine extends StatefulWidget {
 class _PatientRoutineState extends State<PatientRoutine>
     with TickerProviderStateMixin {
   late TabController _tabController;
+  bool _generating = false;
 
   User? get _user => FirebaseAuth.instance.currentUser;
 
@@ -31,6 +36,176 @@ class _PatientRoutineState extends State<PatientRoutine>
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  // ─── AI plan generation ────────────────────────────────────────────────────
+  Future<void> _generateWithAI() async {
+    final uid = _user?.uid;
+    if (uid == null) return;
+
+    setState(() => _generating = true);
+
+    try {
+      final db = FirebaseFirestore.instance;
+      final userDoc = await db.collection('users').doc(uid).get();
+      final userData = userDoc.data() ?? {};
+      final privacyOn = userData['privacyModeEnabled'] == true;
+
+      // Build profile
+      final profile = <String, dynamic>{
+        'age': userData['age'],
+        'gender': userData['gender'],
+        'weight': userData['weight'],
+        'height': userData['height'],
+        'bloodGroup': userData['bloodGroup'],
+      };
+
+      // Chronic conditions (decrypt if needed)
+      List<String> chronic =
+          List<String>.from(userData['chronicConditions'] as List? ?? []);
+      if (privacyOn && chronic.isNotEmpty) {
+        chronic = await EncryptionService.decryptList(uid, chronic);
+      }
+
+      // Fetch allergies subcollection
+      final allergySnap =
+          await db.collection('users').doc(uid).collection('allergies').get();
+      final allergies = <Map<String, dynamic>>[];
+      for (final doc in allergySnap.docs) {
+        var data = doc.data();
+        if (privacyOn) data = await EncryptionService.decryptMap(uid, data);
+        allergies.add(data);
+      }
+
+      // Fetch medications subcollection
+      final medSnap =
+          await db.collection('users').doc(uid).collection('medications').get();
+      final medications = <Map<String, dynamic>>[];
+      for (final doc in medSnap.docs) {
+        var data = doc.data();
+        if (privacyOn) data = await EncryptionService.decryptMap(uid, data);
+        medications.add(data);
+      }
+
+      // Medical history from linked patients doc
+      String medicalHistory = '';
+      final linkedId = userData['linkedPatientId'] as String?;
+      if (linkedId != null && linkedId.isNotEmpty) {
+        final patDoc = await db.collection('patients').doc(linkedId).get();
+        if (patDoc.exists) {
+          medicalHistory = patDoc.data()?['medical history'] as String? ?? '';
+        }
+      }
+
+      final healthContext = <String, dynamic>{
+        'profile': profile,
+        'allergies': allergies,
+        'medications': medications,
+        'chronicConditions': chronic,
+        'medicalHistory': medicalHistory,
+      };
+
+      // Call Gemini
+      final rawResponse =
+          await GeminiService().generatePersonalizedPlan(healthContext: healthContext);
+
+      // Strip markdown code fences if present
+      String jsonStr = rawResponse.trim();
+      if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.replaceFirst(RegExp(r'^```\w*\n?'), '');
+        jsonStr = jsonStr.replaceFirst(RegExp(r'\n?```$'), '');
+        jsonStr = jsonStr.trim();
+      }
+
+      final parsed = jsonDecode(jsonStr) as Map<String, dynamic>;
+
+      // Save to Firestore — clear old AI-generated entries first, then write new ones
+      final batch = db.batch();
+
+      // Daily
+      final dailyList = (parsed['daily'] as List?) ?? [];
+      final oldDaily = await _col('routine_daily').get();
+      for (final doc in oldDaily.docs) {
+        batch.delete(doc.reference);
+      }
+      for (final item in dailyList) {
+        batch.set(_col('routine_daily').doc(), Map<String, dynamic>.from(item as Map));
+      }
+
+      // Exercise
+      final exerciseList = (parsed['exercise'] as List?) ?? [];
+      final oldExercise = await _col('routine_exercise').get();
+      for (final doc in oldExercise.docs) {
+        batch.delete(doc.reference);
+      }
+      for (final item in exerciseList) {
+        batch.set(
+            _col('routine_exercise').doc(), Map<String, dynamic>.from(item as Map));
+      }
+
+      // Diet
+      final dietList = (parsed['diet'] as List?) ?? [];
+      final oldDiet = await _col('routine_diet').get();
+      for (final doc in oldDiet.docs) {
+        batch.delete(doc.reference);
+      }
+      for (final item in dietList) {
+        batch.set(_col('routine_diet').doc(), Map<String, dynamic>.from(item as Map));
+      }
+
+      await batch.commit();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Personalized plan generated successfully!'),
+            backgroundColor: Color(0xFF6C5CE7),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to generate plan: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _generating = false);
+    }
+  }
+
+  void _confirmGenerate() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Generate AI Plan'),
+        content: const Text(
+          'This will use AI to create a personalized daily routine, exercise plan, and diet plan based on your health profile, allergies, medications, and medical history.\n\n'
+          'Existing routine entries will be replaced.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6C5CE7)),
+            onPressed: () {
+              Navigator.pop(ctx);
+              _generateWithAI();
+            },
+            child: const Text('Generate',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
   }
 
   // ─── Generic add/edit sheet builder ──────────────────────────────────────
@@ -145,16 +320,38 @@ class _PatientRoutineState extends State<PatientRoutine>
               ),
             ],
           ),
-          child: const Column(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Daily Routine',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold)),
-              SizedBox(height: 8),
-              Text("Follow your doctor's recommended daily routine",
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text('Daily Routine',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                  _generating
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : IconButton(
+                          onPressed: _confirmGenerate,
+                          icon: const Icon(Icons.auto_awesome,
+                              color: Colors.white),
+                          tooltip: 'Generate with AI',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                  "Follow your doctor's recommended daily routine",
                   style: TextStyle(color: Colors.white70, fontSize: 14)),
             ],
           ),

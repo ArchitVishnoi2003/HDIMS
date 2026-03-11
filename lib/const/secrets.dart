@@ -3,7 +3,7 @@ class Secrets {
   // WARNING: Shipping API keys in apps is insecure. Prefer server-side keys
   // or authenticated proxy in production. If you still want client-side,
   // restrict the key in Google AI Studio.
-  static const String geminiApiKey = 'AIzaSyD1QkGoiR214BtByJ7eaSi3Bq-nCNop5gE';
+  static const String geminiApiKey = 'AIzaSyDpaGetzi41Zq664QDv9-qqs3ZdokGDoFo';
 }
 
 
