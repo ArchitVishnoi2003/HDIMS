@@ -69,6 +69,16 @@ class GeminiService {
     if (history.isNotEmpty) {
       context.writeln('\nMedical History: $history');
     }
+    // Preferences
+    final prefs = healthContext['preferences'] as Map<String, dynamic>? ?? {};
+    if (prefs.isNotEmpty) {
+      context.writeln('\nPatient Preferences:');
+      for (final e in prefs.entries) {
+        if (e.value != null && e.value.toString().isNotEmpty) {
+          context.writeln('- ${e.key}: ${e.value}');
+        }
+      }
+    }
 
     final prompt = '''
 You are a healthcare wellness assistant. Based on the patient data below, generate a personalized daily routine, exercise plan, and diet plan.
@@ -93,6 +103,9 @@ Rules:
 - Generate 4-6 exercises appropriate for the patient's age, weight, and conditions
 - Generate 4-5 meals (breakfast, mid-morning snack, lunch, evening snack, dinner)
 - AVOID any foods the patient is allergic to
+- Strictly follow the patient's diet preference (no meat/fish for Vegetarian/Vegan, etc.)
+- Match exercise intensity to the patient's fitness level and strength training comfort
+- Incorporate the patient's specific goals into the plan
 - Consider medication schedules and chronic conditions
 - Keep exercise intensity appropriate for the patient's health status
 - If patient has chronic conditions, tailor recommendations accordingly

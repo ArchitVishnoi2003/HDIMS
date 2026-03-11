@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterapp/services/access_request_service.dart';
 import 'ad_patient.dart';
 import 'update_patient.dart';
 import 'delete_patient.dart';
@@ -137,6 +138,14 @@ class _DashboardState extends State<Dashboard> {
                 Navigator.push(context, MaterialPageRoute(builder: (context) {
                   return const ViewPatient();
                 }));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.link, color: Color(0xFF6C5CE7)),
+              title: const Text('Link Patient'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _showLinkPatientDialog();
               },
             ),
             const Divider(),
@@ -306,6 +315,13 @@ class _DashboardState extends State<Dashboard> {
                       const Color(0xFFF1E4AB),
                       () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ViewPatient())),
                     ),
+                    _buildMenuCard(
+                      context,
+                      'Link Patient',
+                      Icons.link,
+                      const Color(0xFFB8E6CF),
+                      () => _showLinkPatientDialog(),
+                    ),
                   ],
                 ),
                 
@@ -314,6 +330,73 @@ class _DashboardState extends State<Dashboard> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  void _showLinkPatientDialog() {
+    final emailCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Link Patient'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Enter the patient\'s email address. They will receive a request to accept the link.',
+              style: TextStyle(fontSize: 13, color: Colors.black54),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailCtrl,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: const Color(0xFFF8F9FA),
+                labelText: 'Patient Email',
+                labelStyle: const TextStyle(color: Color(0xFF6C5CE7)),
+                prefixIcon:
+                    const Icon(Icons.email, color: Color(0xFF6C5CE7)),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none),
+                focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(
+                        color: Color(0xFF6C5CE7), width: 2)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6C5CE7)),
+            onPressed: () async {
+              final email = emailCtrl.text.trim();
+              if (email.isEmpty) return;
+              Navigator.pop(ctx);
+              final error = await AccessRequestService.requestLink(
+                patientEmail: email,
+                doctorName: userName ?? 'Doctor',
+              );
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(error ?? 'Link request sent to $email.'),
+                backgroundColor:
+                    error != null ? Colors.red : const Color(0xFF6C5CE7),
+              ));
+            },
+            child: const Text('Send Request',
+                style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
     );
   }

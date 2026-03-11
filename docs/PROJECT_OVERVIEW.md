@@ -38,6 +38,8 @@ HDIMS addresses all of the above with a digital-first, privacy-by-design approac
 4. When a patient has enabled Privacy Mode, request access to their self-entered encrypted records and wait for patient approval.
 5. Once approved, view the patient's decrypted medications, allergies, checkups, and appointments in a tabbed dialog. Edit patient records with changes syncing to both `patients` and `users` collections.
 6. Access sessions expire automatically after 4 hours — re-request if needed.
+7. Link an existing patient by email — the patient receives and accepts the request in-app, establishing the doctor-patient relationship.
+8. Manage a linked patient's daily routine, exercise plan, and diet plan directly from the patient detail view.
 
 ### For Patients
 1. Register a patient account (linked to their email).
@@ -48,6 +50,8 @@ HDIMS addresses all of the above with a digital-first, privacy-by-design approac
 6. Receive real-time notifications when a doctor requests access to encrypted records; approve or deny with one tap.
 7. Revoke any active doctor session at any time — access is terminated immediately.
 8. Use the built-in **AI Health Assistant** (powered by Google Gemini) for diet planning and health Q&A.
+9. Generate a personalised daily routine, exercise plan, and diet plan using AI — set preferences (diet type, fitness level, goals) and the system tailors the plan to your health profile.
+10. Accept or deny link requests from doctors who want to establish a care relationship.
 
 ---
 
@@ -63,4 +67,7 @@ HDIMS addresses all of the above with a digital-first, privacy-by-design approac
 | Access-gated editing | Doctors cannot modify records of privacy-enabled patients without approval |
 | Privacy consent at signup | GDPR/HIPAA-aligned consent recorded in Firestore with timestamp |
 | AI health assistant | Personalised diet and wellness guidance without leaving the app |
+| AI routine generation | Tailored daily routine, exercise, and diet plans based on health profile and preferences |
+| Doctor-patient linking | Doctors can link existing patients by email with patient consent |
+| Doctor routine management | Doctors can create and manage routine plans for their linked patients |
 | Cross-platform | Android and iOS from a single codebase |

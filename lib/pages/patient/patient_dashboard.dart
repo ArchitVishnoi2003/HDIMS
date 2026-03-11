@@ -164,6 +164,7 @@ class _PatientDashboardState extends State<PatientDashboard> {
       body: Column(
         children: [
           _buildAccessRequestBanner(),
+          _buildLinkRequestBanner(),
           Expanded(child: _pages[_selectedIndex]),
         ],
       ),
@@ -289,6 +290,88 @@ class _PatientDashboardState extends State<PatientDashboard> {
                       );
                     },
                     child: const Text('Approve',
+                        style:
+                            TextStyle(color: Colors.white, fontSize: 12)),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildLinkRequestBanner() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return const SizedBox.shrink();
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('link_requests')
+          .where('patientUid', isEqualTo: uid)
+          .where('status', isEqualTo: 'pending')
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox.shrink();
+        }
+        return Column(
+          children: snapshot.data!.docs.map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final doctorName = data['doctorName'] as String? ?? 'A doctor';
+            return Container(
+              margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+                border:
+                    Border.all(color: Colors.green.withValues(alpha: 0.35)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.link, color: Colors.green, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '$doctorName wants to link you as their patient.',
+                      style: const TextStyle(fontSize: 13),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        minimumSize: const Size(0, 32)),
+                    onPressed: () async {
+                      await AccessRequestService.denyLink(doc.id);
+                    },
+                    child: const Text('Deny',
+                        style: TextStyle(color: Colors.red, fontSize: 12)),
+                  ),
+                  const SizedBox(width: 4),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      minimumSize: const Size(0, 32),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () async {
+                      final doctorUid =
+                          data['doctorUid'] as String? ?? '';
+                      await AccessRequestService.acceptLink(
+                        requestId: doc.id,
+                        patientUid: uid,
+                        doctorUid: doctorUid,
+                      );
+                      // Refresh linked patient ID
+                      _fetchUserName();
+                    },
+                    child: const Text('Accept',
                         style:
                             TextStyle(color: Colors.white, fontSize: 12)),
                   ),

@@ -179,6 +179,113 @@ class AccessRequestService {
     return patients;
   }
 
+  // ── Doctor-Patient Linking ─────────────────────────────────────────────────
+
+  /// Doctor sends a link request to a patient by email.
+  /// Returns an error message or null on success.
+  static Future<String?> requestLink({
+    required String patientEmail,
+    required String doctorName,
+  }) async {
+    final doctor = FirebaseAuth.instance.currentUser;
+    if (doctor == null) return 'Not authenticated';
+
+    // Find patient user account
+    final userQuery = await _db
+        .collection('users')
+        .where('email', isEqualTo: patientEmail)
+        .where('userType', isEqualTo: 'patient')
+        .limit(1)
+        .get();
+    if (userQuery.docs.isEmpty) {
+      return 'No patient account found with this email.';
+    }
+    final patientUid = userQuery.docs.first.id;
+
+    // Check if already linked to this doctor
+    final existingPatient = await _db
+        .collection('patients')
+        .where('email', isEqualTo: patientEmail)
+        .where('doctorId', isEqualTo: doctor.uid)
+        .limit(1)
+        .get();
+    if (existingPatient.docs.isNotEmpty) {
+      return 'This patient is already linked to you.';
+    }
+
+    // Check for existing pending link request
+    final existingReq = await _db
+        .collection('link_requests')
+        .where('patientUid', isEqualTo: patientUid)
+        .where('doctorUid', isEqualTo: doctor.uid)
+        .where('status', isEqualTo: 'pending')
+        .limit(1)
+        .get();
+    if (existingReq.docs.isNotEmpty) {
+      return 'A pending link request already exists for this patient.';
+    }
+
+    await _db.collection('link_requests').add({
+      'doctorUid': doctor.uid,
+      'doctorEmail': doctor.email,
+      'doctorName': doctorName,
+      'patientEmail': patientEmail,
+      'patientUid': patientUid,
+      'status': 'pending',
+      'requestedAt': FieldValue.serverTimestamp(),
+    });
+    return null; // success
+  }
+
+  /// Patient accepts a link request. Creates a patients doc and sets linkedPatientId.
+  static Future<void> acceptLink({
+    required String requestId,
+    required String patientUid,
+    required String doctorUid,
+  }) async {
+    // Read patient's user doc
+    final userDoc = await _db.collection('users').doc(patientUid).get();
+    final userData = userDoc.data() ?? {};
+
+    // Create a patients collection record for the doctor
+    final patientDocRef = await _db.collection('patients').add({
+      'name': userData['name'] ?? '',
+      'email': userData['email'] ?? '',
+      'phone': userData['phone'] ?? '',
+      'age': (userData['age'] ?? '').toString(),
+      'gender': userData['gender'] ?? '',
+      'address': userData['address'] ?? '',
+      'pin': '',
+      'blood': userData['bloodGroup'] ?? '',
+      'medical history': '',
+      'vaccination': '',
+      'current medication': '',
+      'family history': '',
+      'allergies': '',
+      'doctorId': doctorUid,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+
+    // Set linkedPatientId on the patient's user doc
+    await _db.collection('users').doc(patientUid).update({
+      'linkedPatientId': patientDocRef.id,
+    });
+
+    // Mark link request as accepted
+    await _db.collection('link_requests').doc(requestId).update({
+      'status': 'accepted',
+    });
+  }
+
+  /// Patient denies a link request.
+  static Future<void> denyLink(String requestId) async {
+    await _db
+        .collection('link_requests')
+        .doc(requestId)
+        .update({'status': 'denied'});
+  }
+
   /// Returns the first valid (non-expired) approved request ID for a doctor+patient pair.
   static Future<String?> getApprovedRequestId({
     required String doctorUid,

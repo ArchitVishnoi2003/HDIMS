@@ -8,9 +8,13 @@
 │   ├── allergies/{docId}                # Patient-entered allergies
 │   ├── checkups/{docId}                 # Patient-entered checkup history
 │   ├── appointments/{docId}             # Patient-entered appointments
-│   └── access_sessions/{requestId}      # Decrypted data snapshots for approved doctors
+│   ├── access_sessions/{requestId}      # Decrypted data snapshots for approved doctors
+│   ├── routine_daily/{docId}            # Daily routine entries
+│   ├── routine_exercise/{docId}         # Exercise routine entries
+│   └── routine_diet/{docId}             # Diet plan entries
 ├── patients/{docId}                     # Doctor-entered patient records
-└── access_requests/{docId}              # Doctor→Patient access requests
+├── access_requests/{docId}              # Doctor→Patient access requests
+└── link_requests/{docId}                # Doctor→Patient link requests
 ```
 
 ---
@@ -32,7 +36,11 @@ All authenticated users (both patients and doctors).
 | `weight` | string | Weight |
 | `height` | string | Height |
 | `emergencyContact` | string | Emergency contact |
-| `linkedPatientId` | string? | Auto-linked `patients/{docId}` by email match |
+| `linkedPatientId` | string? | Auto-linked `patients/{docId}` by email match or link request acceptance |
+| `routinePrefDiet` | string? | AI routine preference: diet (e.g. `'Vegetarian'`, `'Non-Vegetarian'`, `'Vegan'`, `'Eggetarian'`) |
+| `routinePrefFitness` | string? | AI routine preference: fitness level (`'Beginner'`, `'Intermediate'`, `'Advanced'`) |
+| `routinePrefStrength` | string? | AI routine preference: strength training comfort (`'None'`, `'Light'`, `'Moderate'`, `'Heavy'`) |
+| `routinePrefGoals` | string? | AI routine preference: free-text goals |
 | `privacyModeEnabled` | bool | Whether encryption is active |
 | `insuranceProvider` | string | Insurance provider (encrypted if privacy on) |
 | `policyNumber` | string | Policy number (encrypted if privacy on) |
@@ -107,6 +115,32 @@ Created when a patient approves a doctor's access request. Contains a **decrypte
 | `appointments` | List\<Map\> | Decrypted appointment records |
 | `expiresAt` | timestamp | Session expiry (4 hours from approval) |
 
+### `users/{uid}/routine_daily/{docId}`
+
+| Field | Type | Description |
+|---|---|---|
+| `time` | string | Time of day (e.g. `'07:00 AM'`) |
+| `activity` | string | Activity description |
+
+### `users/{uid}/routine_exercise/{docId}`
+
+| Field | Type | Description |
+|---|---|---|
+| `name` | string | Exercise name |
+| `duration` | string | Duration (e.g. `'30 min'`) |
+| `frequency` | string | Frequency (e.g. `'Daily'`) |
+| `benefits` | string | Benefits description |
+| `instructions` | string | How to perform the exercise |
+
+### `users/{uid}/routine_diet/{docId}`
+
+| Field | Type | Description |
+|---|---|---|
+| `meal` | string | Meal label (e.g. `'Breakfast'`) |
+| `time` | string | Time of day |
+| `food` | string | Food items |
+| `notes` | string | Notes or restrictions |
+
 ---
 
 ## `patients/{docId}` — Doctor-Entered Records
@@ -155,6 +189,29 @@ pending → approved (patient approves → session created, 4hr TTL)
 pending → denied   (patient denies)
 approved → revoked (patient manually revokes → session deleted)
 approved → expired (4hr TTL passes → session auto-deleted on next read)
+```
+
+---
+
+## `link_requests/{docId}` — Doctor-Patient Linking
+
+Tracks requests from doctors to link an existing patient account by email. The patient must accept in-app before the link is established.
+
+| Field | Type | Description |
+|---|---|---|
+| `doctorUid` | string | Doctor's `users/{uid}` |
+| `doctorEmail` | string | Doctor's email |
+| `doctorName` | string | Doctor's display name |
+| `patientEmail` | string | Target patient's email |
+| `patientUid` | string | Patient's `users/{uid}` (resolved at request time) |
+| `status` | string | `'pending'` \| `'accepted'` \| `'denied'` |
+| `requestedAt` | timestamp | When the link request was made |
+
+### Status Lifecycle
+
+```
+pending → accepted (patient accepts → patients doc created, linkedPatientId set)
+pending → denied   (patient denies)
 ```
 
 ---

@@ -11,7 +11,7 @@
 | Database | Cloud Firestore | NoSQL document store |
 | Encryption | `encrypt` package (AES-256-CBC) | ^5.0.3 |
 | Secure Key Storage | `flutter_secure_storage` | ^9.2.2 (Android Keystore / iOS Keychain) |
-| AI | Google Gemini via `google_generative_ai` | Model fallback chain |
+| AI | Google Gemini via `google_generative_ai` | Model fallback chain; chat + personalised routine generation |
 | SVG Assets | `flutter_svg` | Static vector illustrations |
 
 ---

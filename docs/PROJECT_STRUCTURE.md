@@ -20,7 +20,10 @@ hdimss/
 │   │
 │   ├── data/
 │   │   ├── huhu.dart                # Placeholder (unused)
-│   │   └── gemini_service.dart      # Gemini AI singleton with model fallback
+│   │   └── gemini_service.dart      # Gemini AI singleton with model fallback + personalised plan generation
+│   │
+│   ├── widgets/
+│   │   └── routine_widgets.dart     # Shared routine tab widgets (DailyTab, ExerciseTab, DietTab, cards, helpers)
 │   │
 │   ├── services/
 │   │   ├── encryption_service.dart  # AES-256-CBC field encryption + PBKDF2 key derivation
@@ -36,9 +39,10 @@ hdimss/
 │       │   └── save_email.dart            # Email save utility
 │       │
 │       ├── doctor/                        # Doctor / hospital side
-│       │   ├── dashboard.dart             # Doctor home: 2×2 grid (Add/Update/Delete/View) + drawer
+│       │   ├── dashboard.dart             # Doctor home: grid (Add/Update/Delete/View/Link) + drawer
 │       │   ├── ad_patient.dart            # Add patient form → patients/{docId}
-│       │   ├── view_patient.dart          # List + search patients; enriched data; access requests; view decrypted records
+│       │   ├── view_patient.dart          # List + search patients; enriched data; access requests; view decrypted records; manage routine
+│       │   ├── manage_patient_routine.dart # Doctor manages a patient's routine (Daily/Exercise/Diet tabs)
 │       │   ├── update_patient.dart        # Thin wrapper → SelectPatientToUpdate
 │       │   ├── select_patient_to_update.dart  # Patient picker; access-gated editing
 │       │   ├── edit_patient_details.dart  # Full patient edit form; syncs to users collection
@@ -51,10 +55,11 @@ hdimss/
 │           ├── patient_medicines_allergy.dart # Medications + allergies CRUD; encrypted writes (tab 2)
 │           ├── patient_checkups_history.dart  # Checkup history CRUD; encrypted writes (tab 3)
 │           ├── patient_appointments.dart  # Appointments CRUD; encrypted writes (tab 4)
-│           ├── patient_routine.dart       # Daily routine management (tab 5)
+│           ├── patient_routine.dart       # Daily routine management (tab 5) with AI generation + preferences
 │           ├── patient_profile.dart       # Profile edit only (name, phone, address, age, blood group)
 │           ├── patient_privacy_security.dart  # Privacy Mode toggle + access requests + session management
 │           └── ask_diet_plan.dart         # AI health/diet chat powered by Gemini
+│
 │
 ├── docs/                            # Project documentation (this folder)
 │   ├── PROJECT_OVERVIEW.md
@@ -105,6 +110,9 @@ Firebase.initializeApp()
 | `getApprovedRequestId()` | Returns the first valid approved request ID for a doctor-patient pair |
 | `readSession()` | Reads decrypted session data; auto-deletes if expired |
 | `enrichWithUserData()` | Merges `users` collection data over `patients` collection data for linked accounts; attaches `_userUid` and `_privacyMode` metadata |
+| `requestLink()` | Doctor sends a link request to a patient by email; creates a pending `link_requests` document |
+| `acceptLink()` | Patient accepts link; creates `patients` doc, sets `linkedPatientId` on user doc |
+| `denyLink()` | Patient denies the link request |
 
 ### Firestore Collections
 
@@ -124,6 +132,10 @@ users/{uid}
   /checkups/{id}
   /appointments/{id}
   /access_sessions/{reqId}  ← 4-hour decrypted snapshot for doctor
+  /routine_daily/{id}       ← daily routine entries
+  /routine_exercise/{id}    ← exercise routine entries
+  /routine_diet/{id}        ← diet plan entries
+  routinePrefDiet, routinePrefFitness, routinePrefStrength, routinePrefGoals  ← AI preferences
 
 patients/{docId}
   name, email, phone, age, gender, address, pin, blood
@@ -134,6 +146,11 @@ access_requests/{reqId}
   patientUid, doctorUid, doctorEmail, doctorName
   status ('pending' | 'approved' | 'denied' | 'revoked')
   requestedAt, expiresAt
+
+link_requests/{docId}
+  doctorUid, doctorEmail, doctorName, patientEmail, patientUid
+  status ('pending' | 'accepted' | 'denied')
+  requestedAt
 ```
 
 ### Access Request Status Lifecycle

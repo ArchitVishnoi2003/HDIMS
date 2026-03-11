@@ -133,6 +133,18 @@ flutter build apk --release
 3. Wait for the patient to approve from their device
 4. Once approved, the **"View Records"** button appears and the **Update Patient** flow is unblocked
 
+### Linking an Existing Patient
+1. Dashboard → **Link Patient** (grid card or drawer)
+2. Enter the patient's registered email address → tap **Send Request**
+3. The patient receives a banner on their dashboard
+4. Once the patient taps **Accept**, the link is established and the patient appears in your patient list
+
+### Managing a Patient's Routine
+1. Dashboard → **View Patients** → tap a patient
+2. In the details dialog, tap **Manage Routine** (visible when the patient has a linked account and no unresolved privacy barrier)
+3. Use the three tabs (Daily, Exercise, Diet) to add, edit, or delete routine entries
+4. Changes appear in real-time on the patient's Routine tab
+
 ---
 
 ## 7. Patient Workflow
@@ -207,6 +219,18 @@ Tap **Deny** — the request is rejected immediately.
 2. Type a question about diet, nutrition, or general health
 3. The assistant responds using Google Gemini
 4. Do not include personal identifiers (full name, national ID) in your messages
+
+### Generating a Personalised AI Routine
+1. Patient Dashboard → **Routine** tab (tab 5)
+2. Tap the **sparkle icon** (✨) in the header
+3. Set your preferences: diet type, fitness level, strength training comfort, goals
+4. Tap **Generate** — the app sends your health profile + preferences to Gemini
+5. AI-generated daily routine, exercises, and diet plan replace existing entries
+6. Preferences are saved and pre-populated next time
+
+### Accepting a Doctor Link Request
+1. When a doctor sends a link request, a banner appears at the top of your dashboard
+2. Tap **Accept** to link with the doctor, or **Deny** to reject
 
 ---
 

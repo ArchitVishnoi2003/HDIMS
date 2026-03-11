@@ -18,6 +18,19 @@
 - Tapping it opens a **tabbed dialog** with four tabs: Medications, Allergies, Checkups, and Appointments — all showing the decrypted data from the patient's access session snapshot.
 - Sessions expire automatically after 4 hours.
 
+### Link Patient by Email
+- From the dashboard grid or drawer, tap **Link Patient**.
+- Enter the patient's email address → tap **Send Request**.
+- The system finds the matching patient account and creates a pending `link_requests` document.
+- Duplicate-check: prevents sending if the patient is already linked to the doctor or a pending request already exists.
+- The patient sees a real-time banner on their dashboard and can **Accept** or **Deny** the request.
+- On acceptance, a `patients` document is created with the patient's info and the doctor's UID, and the patient's `linkedPatientId` is set.
+
+### Manage Patient Routine
+- In the **View Patients** detail dialog, a **"Manage Routine"** button appears when the patient has a linked user account (and no privacy barrier).
+- Opens a full-screen page with three tabs: **Daily**, **Exercise**, **Diet** — the same structure as the patient's own Routine tab.
+- The doctor can add, edit, and delete routine entries that appear directly in the patient's Routine tab.
+
 ---
 
 ## Patient Features
@@ -50,7 +63,20 @@
 - Text overflow protection on all fields displaying potentially encrypted data.
 
 ### Daily Routine (Tab 5)
-- Manage daily health routines and habits.
+- Three sub-tabs: **Daily** (time + activity), **Exercise** (name, duration, frequency, benefits, instructions), **Diet** (meal name, time, food items, notes).
+- Add, edit, and delete entries in each category.
+- **AI Plan Generation** — tap the sparkle icon to open a preferences sheet:
+  - **Diet Preference**: Vegetarian / Non-Vegetarian / Vegan / Eggetarian
+  - **Fitness Level**: Beginner / Intermediate / Advanced
+  - **Strength Training**: None / Light / Moderate / Heavy
+  - **Goals**: Free-text (e.g. weight loss, better sleep)
+  - Preferences are saved to Firestore and pre-populated on next use.
+  - On generate, the app collects the patient's health profile (age, weight, allergies, medications, chronic conditions, medical history) and sends it along with preferences to Google Gemini to produce a personalised daily routine, exercise plan, and diet plan.
+  - Existing routine entries are replaced with the AI-generated plan.
+
+### Link Request Banner
+- A real-time banner appears on the patient dashboard when a doctor sends a link request: *"{doctorName} wants to link you as their patient."*
+- **Accept** creates the link (patients doc + linkedPatientId). **Deny** rejects the request.
 
 ### Profile Settings
 - Edit display name, phone, address, age, and blood group.
