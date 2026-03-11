@@ -41,10 +41,10 @@ hdimss/
 │       ├── doctor/                        # Doctor / hospital side
 │       │   ├── dashboard.dart             # Doctor home: grid (Add/Update/Delete/View/Link) + drawer
 │       │   ├── ad_patient.dart            # Add patient form → patients/{docId}
-│       │   ├── view_patient.dart          # List + search patients; enriched data; access requests; view decrypted records; manage routine
+│       │   ├── view_patient.dart          # List + search patients; enriched data; access requests; view decrypted records
 │       │   ├── manage_patient_routine.dart # Doctor manages a patient's routine (Daily/Exercise/Diet tabs)
 │       │   ├── update_patient.dart        # Thin wrapper → SelectPatientToUpdate
-│       │   ├── select_patient_to_update.dart  # Patient picker; access-gated editing
+│       │   ├── select_patient_to_update.dart  # Patient picker; access-gated editing; manage routine
 │       │   ├── edit_patient_details.dart  # Full patient edit form; syncs to users collection
 │       │   └── delete_patient.dart        # Patient list with delete confirmation; enriched data
 │       │

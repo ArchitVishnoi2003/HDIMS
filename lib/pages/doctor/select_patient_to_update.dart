@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutterapp/pages/doctor/manage_patient_routine.dart';
 import 'package:flutterapp/services/access_request_service.dart';
 import 'edit_patient_details.dart';
 
@@ -81,6 +82,41 @@ class _SelectPatientToUpdateState extends State<SelectPatientToUpdate> {
                phone.contains(searchQuery);
       }).toList();
     });
+  }
+
+  Future<void> _navigateToManageRoutine(Map<String, dynamic> patient) async {
+    final patientUid = patient['_userUid'] as String?;
+    if (patientUid == null) return;
+
+    final doctorUid = FirebaseAuth.instance.currentUser?.uid;
+    if (doctorUid == null) return;
+
+    final privacyEnabled = patient['_privacyMode'] == true;
+    if (privacyEnabled) {
+      final hasAccess = await AccessRequestService.hasAccess(
+        doctorUid: doctorUid,
+        patientUid: patientUid,
+      );
+      if (!mounted) return;
+      if (!hasAccess) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'This patient has Privacy Mode on. Request access from View Patients first.'),
+        ));
+        return;
+      }
+    }
+
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ManagePatientRoutine(
+          patientUid: patientUid,
+          patientName: patient['name'] ?? 'Patient',
+        ),
+      ),
+    );
   }
 
   Future<void> _navigateToEditPatient(Map<String, dynamic> patient) async {
@@ -346,17 +382,43 @@ class _SelectPatientToUpdateState extends State<SelectPatientToUpdate> {
                                               ),
                                             ],
                                           ),
-                                          trailing: Container(
-                                            padding: const EdgeInsets.all(8),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF6C5CE7).withOpacity(0.1),
-                                              borderRadius: BorderRadius.circular(8),
-                                            ),
-                                            child: const Icon(
-                                              Icons.edit,
-                                              color: Color(0xFF6C5CE7),
-                                              size: 20,
-                                            ),
+                                          trailing: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              if (patient['_userUid'] != null)
+                                                GestureDetector(
+                                                  onTap: () => _navigateToManageRoutine(patient),
+                                                  child: Container(
+                                                    padding: const EdgeInsets.all(8),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.green.withOpacity(0.1),
+                                                      borderRadius: BorderRadius.circular(8),
+                                                    ),
+                                                    child: const Icon(
+                                                      Icons.calendar_month,
+                                                      color: Colors.green,
+                                                      size: 20,
+                                                    ),
+                                                  ),
+                                                ),
+                                              if (patient['_userUid'] != null)
+                                                const SizedBox(width: 8),
+                                              GestureDetector(
+                                                onTap: () => _navigateToEditPatient(patient),
+                                                child: Container(
+                                                  padding: const EdgeInsets.all(8),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFF6C5CE7).withOpacity(0.1),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.edit,
+                                                    color: Color(0xFF6C5CE7),
+                                                    size: 20,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                           onTap: () => _navigateToEditPatient(patient),
                                         ),

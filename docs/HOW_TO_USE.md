@@ -140,8 +140,8 @@ flutter build apk --release
 4. Once the patient taps **Accept**, the link is established and the patient appears in your patient list
 
 ### Managing a Patient's Routine
-1. Dashboard → **View Patients** → tap a patient
-2. In the details dialog, tap **Manage Routine** (visible when the patient has a linked account and no unresolved privacy barrier)
+1. Dashboard → **Update Patient**
+2. On the patient card, tap the **calendar icon** (visible when the patient has a linked account)
 3. Use the three tabs (Daily, Exercise, Diet) to add, edit, or delete routine entries
 4. Changes appear in real-time on the patient's Routine tab
 

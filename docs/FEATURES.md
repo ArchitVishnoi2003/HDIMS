@@ -27,8 +27,8 @@
 - On acceptance, a `patients` document is created with the patient's info and the doctor's UID, and the patient's `linkedPatientId` is set.
 
 ### Manage Patient Routine
-- In the **View Patients** detail dialog, a **"Manage Routine"** button appears when the patient has a linked user account (and no privacy barrier).
-- Opens a full-screen page with three tabs: **Daily**, **Exercise**, **Diet** — the same structure as the patient's own Routine tab.
+- In the **Update Patient** list, a **calendar icon** appears on each patient card that has a linked user account.
+- Tapping it opens a full-screen page with three tabs: **Daily**, **Exercise**, **Diet** — the same structure as the patient's own Routine tab.
 - The doctor can add, edit, and delete routine entries that appear directly in the patient's Routine tab.
 
 ---

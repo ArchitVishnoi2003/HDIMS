@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutterapp/pages/doctor/manage_patient_routine.dart';
 import 'package:flutterapp/services/access_request_service.dart';
 
 class ViewPatient extends StatefulWidget {
@@ -172,30 +171,6 @@ class _ViewPatientState extends State<ViewPatient> {
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('Close'),
           ),
-          if (patientUid != null && (!privacyModeEnabled || approvedRequestId != null))
-            ElevatedButton.icon(
-              icon: const Icon(Icons.calendar_month,
-                  size: 16, color: Colors.white),
-              label: const Text('Manage Routine',
-                  style: TextStyle(color: Colors.white, fontSize: 13)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6C5CE7),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-              ),
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => ManagePatientRoutine(
-                      patientUid: patientUid,
-                      patientName: patient['name'] ?? 'Patient',
-                    ),
-                  ),
-                );
-              },
-            ),
           if (privacyModeEnabled && patientUid != null) ...[
             if (approvedRequestId != null)
               ElevatedButton.icon(
