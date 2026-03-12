@@ -357,7 +357,7 @@ class _ViewPatientState extends State<ViewPatient> {
             '$label:',
             style: const TextStyle(
               fontWeight: FontWeight.bold,
-              color: Color(0xffF1E4AB),
+              color: Color.fromARGB(255, 1, 94, 131),
             ),
           ),
           Text(
