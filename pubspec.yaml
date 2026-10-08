@@ -38,6 +38,7 @@ dependencies:
   firebase_core: ^4.1.1
   cloud_firestore: ^6.0.2
   firebase_auth: ^6.1.0
+  google_sign_in: ^6.2.1
 
   flutter_svg: ^2.2.1
   google_generative_ai: ^0.4.7

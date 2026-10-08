@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutterapp/services/encryption_service.dart';
 import 'package:flutterapp/services/access_request_service.dart';
+import 'package:flutterapp/services/auth_service.dart';
 
 class PatientPrivacySecurity extends StatefulWidget {
   const PatientPrivacySecurity({super.key});
@@ -336,6 +337,11 @@ class _PatientPrivacySecurityState extends State<PatientPrivacySecurity> {
             ),
 
             const SizedBox(height: 24),
+
+            // ── Linked Authentication Methods ─────────────────────────
+            _buildLinkedAccountsCard(),
+
+            const SizedBox(height: 20),
 
             // ── Privacy Mode toggle ──────────────────────────────────
             _buildPrivacyModeCard(),
@@ -750,6 +756,454 @@ class _PatientPrivacySecurityState extends State<PatientPrivacySecurity> {
                 }).toList(),
               );
             },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Linked Authentication Accounts Card ─────────────────────────────────
+  Widget _buildLinkedAccountsCard() {
+    User? currentUser = FirebaseAuth.instance.currentUser;
+    final List<String> providers = currentUser?.providerData
+            .map((p) => p.providerId)
+            .toList() ??
+        [];
+
+    final bool hasEmail = providers.contains('password');
+    final bool hasPhone = providers.contains('phone');
+    final bool hasGoogle = providers.contains('google.com');
+
+    String? emailVal = currentUser?.email;
+    String? phoneVal = currentUser?.phoneNumber;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6C5CE7).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.link, color: Color(0xFF6C5CE7), size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Linked Account Methods',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF6C5CE7),
+                      ),
+                    ),
+                    Text(
+                      'Sign in using any linked auth provider',
+                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Email & Password Provider Row
+          _buildProviderItem(
+            icon: Icons.email,
+            title: 'Email & Password',
+            subtitle: hasEmail
+                ? (emailVal != null && emailVal.isNotEmpty
+                    ? emailVal
+                    : 'Email linked')
+                : 'Not linked',
+            isLinked: hasEmail,
+            onAction: hasEmail
+                ? null
+                : () => _showLinkEmailDialog(),
+          ),
+          const Divider(height: 20),
+
+          // Phone Number OTP Provider Row
+          _buildProviderItem(
+            icon: Icons.phone_android,
+            title: 'Phone Number (OTP)',
+            subtitle: hasPhone
+                ? (phoneVal != null && phoneVal.isNotEmpty
+                    ? phoneVal
+                    : 'Phone linked')
+                : 'Not linked',
+            isLinked: hasPhone,
+            onAction: hasPhone
+                ? null
+                : () => _showLinkPhoneSheet(),
+          ),
+          const Divider(height: 20),
+
+          // Google Account Provider Row
+          _buildProviderItem(
+            icon: Icons.g_mobiledata,
+            title: 'Google Account',
+            subtitle: hasGoogle ? 'Google Account linked' : 'Not linked',
+            isLinked: hasGoogle,
+            onAction: hasGoogle
+                ? null
+                : () => _handleLinkGoogle(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProviderItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool isLinked,
+    VoidCallback? onAction,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: isLinked ? Colors.green[600] : Colors.grey[400], size: 24),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isLinked ? Colors.black87 : Colors.grey[500],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (isLinked)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.green.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.check, color: Colors.green, size: 14),
+                SizedBox(width: 4),
+                Text(
+                  'Linked',
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6C5CE7),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              minimumSize: const Size(0, 32),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: onAction,
+            child: const Text('Link', style: TextStyle(color: Colors.white, fontSize: 12)),
+          ),
+      ],
+    );
+  }
+
+  // ── Handle Link Google ───────────────────────────────────────────────────
+  Future<void> _handleLinkGoogle() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await AuthService.linkGoogleAccount();
+      setState(() {});
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Google account linked successfully!')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Error linking Google: ${e.toString()}')),
+      );
+    }
+  }
+
+  // ── Handle Link Phone via OTP Sheet ──────────────────────────────────────
+  void _showLinkPhoneSheet() {
+    final phoneCtrl = TextEditingController();
+    final otpCtrl = TextEditingController();
+    String? verificationId;
+    bool isOtpSent = false;
+    bool isLoading = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (modalCtx, setModalState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(modalCtx).viewInsets.bottom,
+            ),
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.phone_android, color: Color(0xFF6C5CE7)),
+                      const SizedBox(width: 10),
+                      Text(
+                        isOtpSent ? 'Verify Phone OTP' : 'Link Phone Number',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (!isOtpSent) ...[
+                    TextField(
+                      controller: phoneCtrl,
+                      keyboardType: TextInputType.phone,
+                      decoration: InputDecoration(
+                        labelText: 'Phone Number (e.g. +919876543210)',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6C5CE7),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: isLoading
+                            ? null
+                            : () async {
+                                final phone = phoneCtrl.text.trim();
+                                if (phone.isEmpty) return;
+                                final formattedPhone =
+                                    phone.startsWith('+') ? phone : '+91$phone';
+                                setModalState(() => isLoading = true);
+                                try {
+                                  await AuthService.verifyPhoneNumber(
+                                    phoneNumber: formattedPhone,
+                                    onCodeSent: (vId, _) {
+                                      setModalState(() {
+                                        verificationId = vId;
+                                        isOtpSent = true;
+                                        isLoading = false;
+                                      });
+                                    },
+                                    onVerificationCompleted: (_) {},
+                                    onVerificationFailed: (e) {
+                                      setModalState(() => isLoading = false);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text('Failed: ${e.message}')),
+                                      );
+                                    },
+                                    onAutoRetrievalTimeout: (vId) {
+                                      verificationId = vId;
+                                    },
+                                  );
+                                } catch (e) {
+                                  setModalState(() => isLoading = false);
+                                }
+                              },
+                        child: isLoading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text(
+                                'Send OTP Code',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ] else ...[
+                    TextField(
+                      controller: otpCtrl,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        letterSpacing: 6,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF6C5CE7),
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Enter 6-digit OTP',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6C5CE7),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        onPressed: isLoading
+                            ? null
+                            : () async {
+                                final code = otpCtrl.text.trim();
+                                if (code.length != 6 || verificationId == null) return;
+                                setModalState(() => isLoading = true);
+                                final messenger = ScaffoldMessenger.of(context);
+                                final modalNav = Navigator.of(modalCtx);
+                                try {
+                                  await AuthService.linkPhoneCredential(
+                                    verificationId: verificationId!,
+                                    smsCode: code,
+                                  );
+                                  if (mounted) {
+                                    modalNav.pop();
+                                    setState(() {});
+                                    messenger.showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Phone number linked successfully!'),
+                                      ),
+                                    );
+                                  }
+                                } catch (e) {
+                                  setModalState(() => isLoading = false);
+                                  messenger.showSnackBar(
+                                    SnackBar(content: Text('Error linking phone: $e')),
+                                  );
+                                }
+                              },
+                        child: isLoading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text(
+                                'Verify & Link Phone',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Handle Link Email Dialog ──────────────────────────────────────────────
+  void _showLinkEmailDialog() {
+    final emailCtrl = TextEditingController();
+    final passCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Link Email & Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: emailCtrl,
+              decoration: const InputDecoration(labelText: 'Email Address'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: passCtrl,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Password'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6C5CE7)),
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final nav = Navigator.of(ctx);
+              final email = emailCtrl.text.trim();
+              final pass = passCtrl.text.trim();
+              if (email.isEmpty || pass.isEmpty) return;
+              try {
+                await AuthService.linkEmailPasswordCredential(
+                  email: email,
+                  password: pass,
+                );
+                if (mounted) {
+                  nav.pop();
+                  setState(() {});
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Email & password linked successfully!')),
+                  );
+                }
+              } catch (e) {
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Error linking email: $e')),
+                );
+              }
+            },
+            child: const Text('Link Email', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),

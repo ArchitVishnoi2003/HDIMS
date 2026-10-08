@@ -1,82 +1,88 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutterapp/services/auth_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
-  
+
   @override
   _HomeScreenState createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final TextEditingController _nameController = TextEditingController(); 
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
+
   bool _isSignUp = true;
   bool _isLoading = false;
   bool _consentGiven = false;
   String _selectedUserType = 'patient';
-  String _selectedLoginType = 'patient'; // For login mode
+  String _selectedLoginType = 'patient';
 
-  Future<void> _handleAuth() async {
+  // Auth method: 'email' or 'phone'
+  String _authMethod = 'email';
+
+  // OTP state
+  String? _verificationId;
+  int? _resendToken;
+  int _timerSeconds = 60;
+  Timer? _timer;
+
+  void _startTimer() {
+    _timerSeconds = 60;
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      if (_timerSeconds > 0) {
+        setState(() => _timerSeconds--);
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  // ── Handle Email/Password Auth ───────────────────────────────────────────
+  Future<void> _handleEmailAuth() async {
     if (_emailController.text.trim().isEmpty || _passwordController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields')),
+        const SnackBar(content: Text('Please fill in all email and password fields')),
       );
       return;
     }
 
     if (_isSignUp && _nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your name')),
+        const SnackBar(content: Text('Please enter your full name')),
       );
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
-
-    // Store context before async operations
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    setState(() => _isLoading = true);
+    final messenger = ScaffoldMessenger.of(context);
 
     try {
       if (_isSignUp) {
-        // Sign up
-        UserCredential userCredential = await FirebaseAuth.instance
-            .createUserWithEmailAndPassword(
-              email: _emailController.text.trim(),
-              password: _passwordController.text.trim(),
-            );
-
-        // Save user data to Firestore
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userCredential.user!.uid)
-            .set({
-          'name': _nameController.text.trim(),
-          'email': _emailController.text.trim(),
-          'userType': _selectedUserType,
-          'createdAt': FieldValue.serverTimestamp(),
-          'privacyConsentAt': FieldValue.serverTimestamp(),
-          'privacyConsentVersion': '1.0',
-        });
-
-        scaffoldMessenger.showSnackBar(
+        await AuthService.signUpWithEmail(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+          name: _nameController.text.trim(),
+          userType: _selectedUserType,
+        );
+        messenger.showSnackBar(
           const SnackBar(content: Text('Account created successfully!')),
         );
-        
-        // Navigate to appropriate dashboard based on user type
         _navigateToDashboard(_selectedUserType);
       } else {
-        // Sign in
-        await FirebaseAuth.instance.signInWithEmailAndPassword(
+        await AuthService.signInWithEmail(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
 
-        // Verify that the selected login type matches the stored userType
         User? currentUser = FirebaseAuth.instance.currentUser;
         if (currentUser != null) {
           DocumentSnapshot userDoc = await FirebaseFirestore.instance
@@ -90,7 +96,6 @@ class _HomeScreenState extends State<HomeScreen> {
             storedType = userData['userType'] as String?;
 
             if (storedType == null) {
-              // Legacy account with no type — stamp it now
               await FirebaseFirestore.instance
                   .collection('users')
                   .doc(currentUser.uid)
@@ -99,11 +104,10 @@ class _HomeScreenState extends State<HomeScreen> {
             }
           }
 
-          // Block cross-type login
           if (storedType != null && storedType != _selectedLoginType) {
             await FirebaseAuth.instance.signOut();
             final typeLabel = storedType == 'hospital' ? 'Hospital/Doctor' : 'Patient';
-            scaffoldMessenger.showSnackBar(
+            messenger.showSnackBar(
               SnackBar(
                 content: Text(
                   'This account is registered as a $typeLabel account. '
@@ -118,11 +122,9 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         }
 
-        scaffoldMessenger.showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(content: Text('Signed in successfully!')),
         );
-
-        // Navigate to appropriate dashboard based on stored userType
         _navigateToDashboard(_selectedLoginType);
       }
     } on FirebaseAuthException catch (e) {
@@ -132,32 +134,385 @@ class _HomeScreenState extends State<HomeScreen> {
           message = 'The password provided is too weak.';
           break;
         case 'email-already-in-use':
-          message = 'The account already exists for that email.';
+          message = 'An account already exists for that email.';
           break;
         case 'user-not-found':
           message = 'No user found for that email.';
           break;
         case 'wrong-password':
-          message = 'Wrong password provided for that user.';
+        case 'invalid-credential':
+          message = 'Invalid email or password.';
           break;
         case 'invalid-email':
           message = 'The email address is not valid.';
           break;
+        default:
+          message = e.message ?? e.code;
       }
-      scaffoldMessenger.showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(message)));
     } catch (e) {
-      scaffoldMessenger.showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-
-    setState(() {
-      _isLoading = false;
-    });
   }
 
+  // ── Handle Phone Send OTP ────────────────────────────────────────────────
+  String _formatPhoneNumber(String input) {
+    String trimmed = input.trim();
+    if (trimmed.startsWith('+')) {
+      return trimmed;
+    }
+    // Default country code if not specified (+91 for India, customizable)
+    return '+91$trimmed';
+  }
+
+  Future<void> _handleSendOtp() async {
+    String rawPhone = _phoneController.text.trim();
+    if (rawPhone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid phone number')),
+      );
+      return;
+    }
+
+    if (_isSignUp && _nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your full name')),
+      );
+      return;
+    }
+
+    String formattedPhone = _formatPhoneNumber(rawPhone);
+
+    setState(() => _isLoading = true);
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      await AuthService.verifyPhoneNumber(
+        phoneNumber: formattedPhone,
+        resendToken: _resendToken,
+        onCodeSent: (String verificationId, int? resendToken) {
+          if (!mounted) return;
+          setState(() {
+            _verificationId = verificationId;
+            _resendToken = resendToken;
+            _isLoading = false;
+          });
+          _startTimer();
+          messenger.showSnackBar(
+            SnackBar(content: Text('OTP sent to $formattedPhone')),
+          );
+          _showOtpModal(formattedPhone);
+        },
+        onVerificationCompleted: (PhoneAuthCredential credential) async {
+          if (!mounted) return;
+          final nav = Navigator.of(context);
+          messenger.showSnackBar(
+            const SnackBar(content: Text('Phone number automatically verified!')),
+          );
+          try {
+            UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+            if (userCredential.user != null) {
+              await AuthService.syncUserFirestoreData(
+                userCredential.user!,
+                name: _isSignUp ? _nameController.text.trim() : null,
+                userType: _isSignUp ? _selectedUserType : _selectedLoginType,
+                phone: formattedPhone,
+              );
+            }
+            if (mounted && nav.canPop()) {
+              nav.pop(); // Close sheet if open
+            }
+            _navigateToDashboard(_isSignUp ? _selectedUserType : _selectedLoginType);
+          } catch (e) {
+            debugPrint('Auto verification sign-in error: $e');
+          }
+        },
+        onVerificationFailed: (FirebaseAuthException e) {
+          if (!mounted) return;
+          setState(() => _isLoading = false);
+          messenger.showSnackBar(
+            SnackBar(content: Text('OTP verification failed: ${e.message}')),
+          );
+        },
+        onAutoRetrievalTimeout: (String verificationId) {
+          if (!mounted) return;
+          _verificationId = verificationId;
+        },
+      );
+    } catch (e) {
+      if (mounted) setState(() => _isLoading = false);
+      messenger.showSnackBar(
+        SnackBar(content: Text('Failed to send OTP: ${e.toString()}')),
+      );
+    }
+  }
+
+  // ── Handle Verify OTP ─────────────────────────────────────────────────────
+  Future<void> _handleVerifyOtp(StateSetter setModalState, String formattedPhone) async {
+    final smsCode = _otpController.text.trim();
+    if (smsCode.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter 6-digit OTP code')),
+      );
+      return;
+    }
+
+    if (_verificationId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Verification ID missing. Please resend OTP.')),
+      );
+      return;
+    }
+
+    setModalState(() => _isLoading = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final nav = Navigator.of(context);
+
+    try {
+      await AuthService.signInWithPhoneCredential(
+        verificationId: _verificationId!,
+        smsCode: smsCode,
+        name: _isSignUp ? _nameController.text.trim() : null,
+        userType: _isSignUp ? _selectedUserType : _selectedLoginType,
+        rawPhone: formattedPhone,
+      );
+
+      if (mounted) {
+        nav.pop(); // Close OTP modal
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              _isSignUp ? 'Account created & verified!' : 'Phone signed in successfully!',
+            ),
+          ),
+        );
+        _navigateToDashboard(_isSignUp ? _selectedUserType : _selectedLoginType);
+      }
+    } on FirebaseAuthException catch (e) {
+      setModalState(() => _isLoading = false);
+      String msg = 'Invalid OTP code.';
+      if (e.code == 'invalid-verification-code') {
+        msg = 'Invalid OTP code entered. Please try again.';
+      } else if (e.code == 'credential-already-in-use') {
+        msg = 'This phone number is already linked to another account.';
+      }
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
+    } catch (e) {
+      setModalState(() => _isLoading = false);
+      messenger.showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+    }
+  }
+
+  // ── Show OTP Bottom Sheet ─────────────────────────────────────────────────
+  void _showOtpModal(String formattedPhone) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (modalCtx, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(modalCtx).viewInsets.bottom,
+              ),
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(25)),
+                ),
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6C5CE7).withValues(alpha: 0.1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.phonelink_ring, color: Color(0xFF6C5CE7)),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Verify Phone Number',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'Code sent to $formattedPhone',
+                              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: _otpController,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        letterSpacing: 8,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF6C5CE7),
+                      ),
+                      decoration: InputDecoration(
+                        counterText: '',
+                        hintText: '000000',
+                        hintStyle: TextStyle(
+                          color: Colors.grey[300],
+                          letterSpacing: 8,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFFF8F9FA),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: Color(0xFF6C5CE7), width: 2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _timerSeconds > 0
+                              ? 'Resend code in ${_timerSeconds}s'
+                              : 'Didn\'t receive code?',
+                          style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                        ),
+                        TextButton(
+                          onPressed: _timerSeconds == 0
+                              ? () {
+                                  Navigator.of(modalCtx).pop();
+                                  _handleSendOtp();
+                                }
+                              : null,
+                          child: Text(
+                            'Resend OTP',
+                            style: TextStyle(
+                              color: _timerSeconds == 0
+                                  ? const Color(0xFF6C5CE7)
+                                  : Colors.grey,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: _isLoading
+                            ? null
+                            : () => _handleVerifyOtp(setModalState, formattedPhone),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6C5CE7),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: _isLoading
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text(
+                                'Verify & Continue',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ── Handle Google Sign In ─────────────────────────────────────────────────
+  Future<void> _handleGoogleSignIn() async {
+    setState(() => _isLoading = true);
+    final messenger = ScaffoldMessenger.of(context);
+
+    try {
+      UserCredential? credential = await AuthService.signInWithGoogle(
+        userType: _isSignUp ? _selectedUserType : _selectedLoginType,
+      );
+
+      if (credential == null) {
+        // User cancelled Google sign in
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Signed in with Google successfully!')),
+      );
+
+      // Determine user type from Firestore
+      User? user = credential.user;
+      String userTypeToNavigate = _isSignUp ? _selectedUserType : _selectedLoginType;
+
+      if (user != null) {
+        DocumentSnapshot doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        if (doc.exists) {
+          final data = doc.data() as Map<String, dynamic>;
+          userTypeToNavigate = data['userType'] ?? userTypeToNavigate;
+        }
+      }
+
+      _navigateToDashboard(userTypeToNavigate);
+    } on FirebaseAuthException catch (e) {
+      String msg = e.message ?? 'Google Sign-In failed';
+      if (e.code == 'credential-already-in-use') {
+        msg = 'This Google account is already linked with another user.';
+      }
+      messenger.showSnackBar(SnackBar(content: Text(msg)));
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Google Sign-In Error: ${e.toString()}')),
+      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ── Privacy Modal ────────────────────────────────────────────────────────
   Future<void> _showPrivacyModal() async {
     final ScrollController scrollCtrl = ScrollController();
     bool scrolledToBottom = false;
@@ -187,7 +542,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               child: Column(
                 children: [
-                  // Handle bar
                   Container(
                     margin: const EdgeInsets.symmetric(vertical: 10),
                     width: 40,
@@ -197,7 +551,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  // Header
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     decoration: const BoxDecoration(
@@ -211,15 +564,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Icon(Icons.privacy_tip, color: Colors.white, size: 22),
                         SizedBox(width: 10),
-                        Text('Privacy Policy & Terms',
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold)),
+                        Text(
+                          'Privacy Policy & Terms',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  // Scrollable content
                   Expanded(
                     child: Scrollbar(
                       controller: scrollCtrl,
@@ -229,29 +584,34 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _privacySection('1. What We Collect',
-                                'HDIMS collects personal and health information including your name, email address, contact details, medical history, allergies, medications, appointment records, vital signs, and AI-generated health recommendations. This information is collected when you create an account or enter records in the app.'),
-                            _privacySection('2. How We Use Your Data',
-                                'Your data is used solely to provide health record management features, to allow authorized healthcare providers to view your records, and to personalize AI-driven health recommendations. We do not sell, rent, or share your personal information with third parties for marketing purposes.'),
-                            _privacySection('3. Data Storage & Security',
-                                'All data is stored in Google Firebase (Firestore), a HIPAA-compliant cloud platform. You may optionally enable Privacy Mode, which encrypts your health records using AES-256 on your device before they are uploaded. In Privacy Mode your doctor must request and receive your explicit approval to view your records.'),
-                            _privacySection('4. AI Health Assistant',
-                                'When you use the AI diet and health assistant, your messages are sent to Google\'s Gemini AI service for processing. Do not include personal identifiers such as your full name, national ID, or date of birth in these messages. AI responses are stored both locally and in your account history.'),
-                            _privacySection('5. Your Rights',
-                                'You have the right to access, correct, and delete your personal health data at any time from within the app. You may disable Privacy Mode and reset your encryption PIN at any time. To request full account deletion, contact support@hdims.com.'),
-                            _privacySection('6. Doctor Access',
-                                'Healthcare providers who add you as a patient can view the medical records they have entered on your behalf. If you enable Privacy Mode, doctors must send an access request that you must explicitly approve before they can view your self-entered health records.'),
-                            _privacySection('7. Data Retention',
-                                'Your data is retained as long as your account is active. You may delete your records at any time from within the app. For account deletion requests email support@hdims.com.'),
-                            _privacySection('8. Contact',
-                                'For privacy-related questions contact our Data Protection Officer at privacy@hdims.com. For technical support contact support@hdims.com.'),
+                            _privacySection(
+                              '1. What We Collect',
+                              'HDIMS collects personal and health information including your name, email address, phone number, contact details, medical history, allergies, medications, appointment records, vital signs, and AI-generated health recommendations. This information is collected when you create an account or enter records in the app.',
+                            ),
+                            _privacySection(
+                              '2. How We Use Your Data',
+                              'Your data is used solely to provide health record management features, to allow authorized healthcare providers to view your records, and to personalize AI-driven health recommendations. We do not sell, rent, or share your personal information with third parties for marketing purposes.',
+                            ),
+                            _privacySection(
+                              '3. Data Storage & Security',
+                              'All data is stored in Google Firebase (Firestore), a HIPAA-compliant cloud platform. You may optionally enable Privacy Mode, which encrypts your health records using AES-256 on your device before they are uploaded.',
+                            ),
+                            _privacySection(
+                              '4. AI Health Assistant',
+                              'When you use the AI diet and health assistant, your messages are sent to Google\'s Gemini AI service for processing.',
+                            ),
+                            _privacySection(
+                              '5. Your Rights',
+                              'You have the right to access, correct, and delete your personal health data at any time from within the app.',
+                            ),
                             const SizedBox(height: 8),
                             Text(
-                              'Last updated: March 2026  •  Version 1.0',
+                              'Last updated: March 2026 • Version 1.0',
                               style: TextStyle(
-                                  color: Colors.grey[500],
-                                  fontSize: 12,
-                                  fontStyle: FontStyle.italic),
+                                color: Colors.grey[500],
+                                fontSize: 12,
+                                fontStyle: FontStyle.italic,
+                              ),
                             ),
                             const SizedBox(height: 16),
                           ],
@@ -259,7 +619,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                  // Consent action bar
                   Container(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
                     decoration: BoxDecoration(
@@ -280,12 +639,12 @@ class _HomeScreenState extends State<HomeScreen> {
                             padding: const EdgeInsets.only(bottom: 8),
                             child: Row(
                               children: [
-                                Icon(Icons.arrow_downward,
-                                    size: 14, color: Colors.orange[700]),
+                                Icon(Icons.arrow_downward, size: 14, color: Colors.orange[700]),
                                 const SizedBox(width: 5),
-                                Text('Scroll down to read the full policy',
-                                    style: TextStyle(
-                                        color: Colors.orange[700], fontSize: 12)),
+                                Text(
+                                  'Scroll down to read the full policy',
+                                  style: TextStyle(color: Colors.orange[700], fontSize: 12),
+                                ),
                               ],
                             ),
                           ),
@@ -311,20 +670,22 @@ class _HomeScreenState extends State<HomeScreen> {
                           width: double.infinity,
                           height: 48,
                           child: ElevatedButton(
-                            onPressed: localConsent
-                                ? () => Navigator.of(ctx).pop(true)
-                                : null,
+                            onPressed: localConsent ? () => Navigator.of(ctx).pop(true) : null,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF6C5CE7),
                               disabledBackgroundColor: Colors.grey[300],
                               shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
-                            child: const Text('Confirm & Continue',
-                                style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold)),
+                            child: const Text(
+                              'Confirm & Continue',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -350,23 +711,26 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF6C5CE7))),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF6C5CE7),
+            ),
+          ),
           const SizedBox(height: 5),
-          Text(body,
-              style: const TextStyle(
-                  fontSize: 13, color: Colors.black87, height: 1.6)),
+          Text(
+            body,
+            style: const TextStyle(fontSize: 13, color: Colors.black87, height: 1.6),
+          ),
         ],
       ),
     );
   }
 
   void _navigateToDashboard(String userType) {
-    // Add a small delay to ensure the success message is shown
-    Future.delayed(const Duration(milliseconds: 1500), () {
+    Future.delayed(const Duration(milliseconds: 800), () {
       if (mounted) {
         if (userType == 'hospital') {
           Navigator.of(context).pushReplacementNamed('/dashboard');
@@ -382,6 +746,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _phoneController.dispose();
+    _otpController.dispose();
+    _timer?.cancel();
     super.dispose();
   }
 
@@ -395,11 +762,11 @@ class _HomeScreenState extends State<HomeScreen> {
             padding: const EdgeInsets.all(20.0),
             child: Column(
               children: [
-                const SizedBox(height: 40),
-                
-                // Logo/Header section
+                const SizedBox(height: 20),
+
+                // Header Section
                 Container(
-                  padding: const EdgeInsets.all(30),
+                  padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF6C5CE7), Color(0xFF74B9FF)],
@@ -409,7 +776,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     borderRadius: BorderRadius.circular(25),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF6C5CE7).withOpacity(0.3),
+                        color: const Color(0xFF6C5CE7).withValues(alpha: 0.3),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
                       ),
@@ -418,27 +785,27 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Column(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(50),
                         ),
                         child: const Icon(
                           Icons.health_and_safety,
-                          size: 40,
+                          size: 36,
                           color: Color(0xFF6C5CE7),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 14),
                       const Text(
                         "HDIMS Health",
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 28,
+                          fontSize: 26,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 4),
                       const Text(
                         "Smart & Secure Health Ledger",
                         style: TextStyle(
@@ -449,18 +816,18 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                
-                const SizedBox(height: 40),
-                
-                // Form section
+
+                const SizedBox(height: 25),
+
+                // Form Section Card
                 Container(
-                  padding: const EdgeInsets.all(30),
+                  padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(25),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.08),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
                       ),
@@ -471,65 +838,154 @@ class _HomeScreenState extends State<HomeScreen> {
                       Text(
                         _isSignUp ? 'Create Account' : 'Welcome Back!',
                         style: const TextStyle(
-                          fontSize: 24,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
                           color: Colors.black87,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Text(
-                        _isSignUp 
-                            ? 'Please enter your details to create an account'
-                            : 'Please enter your details to sign in',
+                        _isSignUp
+                            ? 'Select preferred method to register'
+                            : 'Select preferred method to sign in',
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           color: Colors.grey,
                         ),
                       ),
-                      const SizedBox(height: 30),
-                      
-                      if (_isSignUp) ...[
-                        _buildTextField(_nameController, 'Full Name', Icons.person),
-                        const SizedBox(height: 20),
-                        _buildUserTypeSelector(),
-                        const SizedBox(height: 20),
-                      ],
-                      
-                      _buildTextField(_emailController, 'Email Address', Icons.email),
                       const SizedBox(height: 20),
-                      
-                      _buildTextField(_passwordController, 'Password', Icons.lock, isPassword: true),
-                      
-                      if (!_isSignUp) ...[
-                        const SizedBox(height: 20),
-                        _buildLoginTypeSelector(),
-                        const SizedBox(height: 15),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () {
-                              // TODO: Implement forgot password
-                            },
-                            child: const Text(
-                              'Forgot Password?',
-                              style: TextStyle(
-                                color: Color(0xFF6C5CE7),
-                                fontWeight: FontWeight.w600,
+
+                      // Auth Method Switcher Tabs (Email vs Phone)
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F9FA),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey[200]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => _authMethod = 'email'),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: _authMethod == 'email'
+                                        ? const Color(0xFF6C5CE7)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.email_outlined,
+                                        size: 18,
+                                        color: _authMethod == 'email'
+                                            ? Colors.white
+                                            : Colors.grey[700],
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Email & Pass',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: _authMethod == 'email'
+                                              ? Colors.white
+                                              : Colors.grey[700],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setState(() => _authMethod = 'phone'),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: _authMethod == 'phone'
+                                        ? const Color(0xFF6C5CE7)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.phone_android,
+                                        size: 18,
+                                        color: _authMethod == 'phone'
+                                            ? Colors.white
+                                            : Colors.grey[700],
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Phone OTP',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 13,
+                                          color: _authMethod == 'phone'
+                                              ? Colors.white
+                                              : Colors.grey[700],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      // Name Field for Sign Up
+                      if (_isSignUp) ...[
+                        _buildTextField(_nameController, 'Full Name', Icons.person),
+                        const SizedBox(height: 16),
+                        _buildUserTypeSelector(),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Method-specific input fields
+                      if (_authMethod == 'email') ...[
+                        _buildTextField(_emailController, 'Email Address', Icons.email,
+                            keyboardType: TextInputType.emailAddress),
+                        const SizedBox(height: 16),
+                        _buildTextField(_passwordController, 'Password', Icons.lock,
+                            isPassword: true),
+                      ] else ...[
+                        _buildTextField(
+                          _phoneController,
+                          'Phone Number (e.g. +91 9876543210)',
+                          Icons.phone,
+                          keyboardType: TextInputType.phone,
                         ),
                       ],
-                      
-                      const SizedBox(height: 30),
-                      
+
+                      // Login Type Selector for Sign In
+                      if (!_isSignUp) ...[
+                        const SizedBox(height: 16),
+                        _buildLoginTypeSelector(),
+                      ],
+
+                      const SizedBox(height: 24),
+
+                      // Consent check box for Sign Up
                       if (_isSignUp) ...[
-                        const SizedBox(height: 4),
                         InkWell(
                           onTap: _showPrivacyModal,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 10),
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
                             decoration: BoxDecoration(
                               color: _consentGiven
                                   ? const Color(0xFF6C5CE7).withValues(alpha: 0.08)
@@ -581,77 +1037,85 @@ class _HomeScreenState extends State<HomeScreen> {
                         const SizedBox(height: 20),
                       ],
 
+                      // Primary Auth Button
                       SizedBox(
                         width: double.infinity,
-                        height: 55,
+                        height: 52,
                         child: ElevatedButton(
                           onPressed: (_isLoading || (_isSignUp && !_consentGiven))
                               ? null
-                              : _handleAuth,
+                              : () {
+                                  if (_authMethod == 'email') {
+                                    _handleEmailAuth();
+                                  } else {
+                                    _handleSendOtp();
+                                  }
+                                },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF6C5CE7),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15),
+                              borderRadius: BorderRadius.circular(14),
                             ),
-                            elevation: 5,
+                            elevation: 4,
                           ),
                           child: _isLoading
                               ? const CircularProgressIndicator(color: Colors.white)
                               : Text(
-                                  _isSignUp ? 'Create Account' : 'Sign In',
+                                  _authMethod == 'phone'
+                                      ? 'Send OTP Verification Code'
+                                      : (_isSignUp ? 'Create Account' : 'Sign In'),
                                   style: const TextStyle(
-                                    fontSize: 16,
+                                    fontSize: 15,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                   ),
                                 ),
                         ),
                       ),
-                      
-                      if (!_isSignUp) ...[
-                        const SizedBox(height: 20),
-                        Row(
-                          children: [
-                            const Expanded(child: Divider()),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                'OR',
-                                style: TextStyle(color: Colors.grey),
-                              ),
+
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          const Expanded(child: Divider()),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            child: Text(
+                              'OR',
+                              style: TextStyle(color: Colors.grey[500], fontSize: 12),
                             ),
-                            const Expanded(child: Divider()),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 55,
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              // TODO: Implement Google sign in
-                            },
-                            icon: const Icon(Icons.g_mobiledata, color: Color(0xFF6C5CE7)),
-                            label: const Text(
-                              'Continue with Google',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF6C5CE7),
-                              ),
+                          ),
+                          const Expanded(child: Divider()),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Google Sign In Button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: OutlinedButton.icon(
+                          onPressed: _isLoading ? null : _handleGoogleSignIn,
+                          icon: const Icon(Icons.g_mobiledata, color: Color(0xFF6C5CE7), size: 28),
+                          label: const Text(
+                            'Continue with Google',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF6C5CE7),
                             ),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Color(0xFF6C5CE7)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(15),
-                              ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFF6C5CE7), width: 1.5),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
                             ),
                           ),
                         ),
-                      ],
-                      
-                      const SizedBox(height: 30),
-                      
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // Toggle Sign In vs Sign Up
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -684,7 +1148,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                
+
                 const SizedBox(height: 30),
               ],
             ),
@@ -694,26 +1158,33 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildTextField(TextEditingController controller, String label, IconData icon, {bool isPassword = false}) {
+  Widget _buildTextField(
+    TextEditingController controller,
+    String label,
+    IconData icon, {
+    bool isPassword = false,
+    TextInputType? keyboardType,
+  }) {
     return TextField(
       controller: controller,
       obscureText: isPassword,
+      keyboardType: keyboardType,
       decoration: InputDecoration(
         filled: true,
         fillColor: const Color(0xFFF8F9FA),
-        contentPadding: const EdgeInsets.all(20),
-        hintText: 'Enter $label',
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        hintText: label,
         hintStyle: const TextStyle(
           color: Colors.grey,
-          fontSize: 16,
+          fontSize: 14,
         ),
-        prefixIcon: Icon(icon, color: const Color(0xFF6C5CE7)),
+        prefixIcon: Icon(icon, color: const Color(0xFF6C5CE7), size: 20),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFF6C5CE7), width: 2),
         ),
       ),
@@ -722,49 +1193,45 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildUserTypeSelector() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0xFF6C5CE7).withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF6C5CE7).withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              Icon(Icons.person_outline, color: const Color(0xFF6C5CE7)),
-              const SizedBox(width: 8),
-              const Text(
+              Icon(Icons.person_outline, color: Color(0xFF6C5CE7), size: 18),
+              SizedBox(width: 8),
+              Text(
                 'Account Type',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF6C5CE7),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 15),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedUserType = 'patient';
-                    });
-                  },
+                  onTap: () => setState(() => _selectedUserType = 'patient'),
                   child: Container(
-                    padding: const EdgeInsets.all(15),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: _selectedUserType == 'patient' 
-                          ? const Color(0xFF6C5CE7) 
+                      color: _selectedUserType == 'patient'
+                          ? const Color(0xFF6C5CE7)
                           : Colors.white,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: _selectedUserType == 'patient' 
-                            ? const Color(0xFF6C5CE7) 
+                        color: _selectedUserType == 'patient'
+                            ? const Color(0xFF6C5CE7)
                             : Colors.grey[300]!,
                       ),
                     ),
@@ -772,19 +1239,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Icon(
                           Icons.person,
-                          color: _selectedUserType == 'patient' 
-                              ? Colors.white 
+                          color: _selectedUserType == 'patient'
+                              ? Colors.white
                               : const Color(0xFF6C5CE7),
-                          size: 30,
+                          size: 24,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Text(
                           'Patient',
                           style: TextStyle(
-                            color: _selectedUserType == 'patient' 
-                                ? Colors.white 
+                            color: _selectedUserType == 'patient'
+                                ? Colors.white
                                 : const Color(0xFF6C5CE7),
                             fontWeight: FontWeight.bold,
+                            fontSize: 13,
                           ),
                         ),
                       ],
@@ -792,24 +1260,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 15),
+              const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedUserType = 'hospital';
-                    });
-                  },
+                  onTap: () => setState(() => _selectedUserType = 'hospital'),
                   child: Container(
-                    padding: const EdgeInsets.all(15),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: _selectedUserType == 'hospital' 
-                          ? const Color(0xFF6C5CE7) 
+                      color: _selectedUserType == 'hospital'
+                          ? const Color(0xFF6C5CE7)
                           : Colors.white,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: _selectedUserType == 'hospital' 
-                            ? const Color(0xFF6C5CE7) 
+                        color: _selectedUserType == 'hospital'
+                            ? const Color(0xFF6C5CE7)
                             : Colors.grey[300]!,
                       ),
                     ),
@@ -817,19 +1281,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Icon(
                           Icons.local_hospital,
-                          color: _selectedUserType == 'hospital' 
-                              ? Colors.white 
+                          color: _selectedUserType == 'hospital'
+                              ? Colors.white
                               : const Color(0xFF6C5CE7),
-                          size: 30,
+                          size: 24,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Text(
                           'Hospital',
                           style: TextStyle(
-                            color: _selectedUserType == 'hospital' 
-                                ? Colors.white 
+                            color: _selectedUserType == 'hospital'
+                                ? Colors.white
                                 : const Color(0xFF6C5CE7),
                             fontWeight: FontWeight.bold,
+                            fontSize: 13,
                           ),
                         ),
                       ],
@@ -846,49 +1311,45 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildLoginTypeSelector() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFF8F9FA),
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: const Color(0xFF6C5CE7).withOpacity(0.3)),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF6C5CE7).withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          const Row(
             children: [
-              Icon(Icons.login, color: const Color(0xFF6C5CE7)),
-              const SizedBox(width: 8),
-              const Text(
+              Icon(Icons.login, color: Color(0xFF6C5CE7), size: 18),
+              SizedBox(width: 8),
+              Text(
                 'Login As',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF6C5CE7),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 15),
+          const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
                 child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedLoginType = 'patient';
-                    });
-                  },
+                  onTap: () => setState(() => _selectedLoginType = 'patient'),
                   child: Container(
-                    padding: const EdgeInsets.all(15),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: _selectedLoginType == 'patient' 
-                          ? const Color(0xFF6C5CE7) 
+                      color: _selectedLoginType == 'patient'
+                          ? const Color(0xFF6C5CE7)
                           : Colors.white,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: _selectedLoginType == 'patient' 
-                            ? const Color(0xFF6C5CE7) 
+                        color: _selectedLoginType == 'patient'
+                            ? const Color(0xFF6C5CE7)
                             : Colors.grey[300]!,
                       ),
                     ),
@@ -896,19 +1357,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Icon(
                           Icons.person,
-                          color: _selectedLoginType == 'patient' 
-                              ? Colors.white 
+                          color: _selectedLoginType == 'patient'
+                              ? Colors.white
                               : const Color(0xFF6C5CE7),
-                          size: 30,
+                          size: 24,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Text(
                           'Patient',
                           style: TextStyle(
-                            color: _selectedLoginType == 'patient' 
-                                ? Colors.white 
+                            color: _selectedLoginType == 'patient'
+                                ? Colors.white
                                 : const Color(0xFF6C5CE7),
                             fontWeight: FontWeight.bold,
+                            fontSize: 13,
                           ),
                         ),
                       ],
@@ -916,24 +1378,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 15),
+              const SizedBox(width: 12),
               Expanded(
                 child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedLoginType = 'hospital';
-                    });
-                  },
+                  onTap: () => setState(() => _selectedLoginType = 'hospital'),
                   child: Container(
-                    padding: const EdgeInsets.all(15),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     decoration: BoxDecoration(
-                      color: _selectedLoginType == 'hospital' 
-                          ? const Color(0xFF6C5CE7) 
+                      color: _selectedLoginType == 'hospital'
+                          ? const Color(0xFF6C5CE7)
                           : Colors.white,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: _selectedLoginType == 'hospital' 
-                            ? const Color(0xFF6C5CE7) 
+                        color: _selectedLoginType == 'hospital'
+                            ? const Color(0xFF6C5CE7)
                             : Colors.grey[300]!,
                       ),
                     ),
@@ -941,19 +1399,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       children: [
                         Icon(
                           Icons.local_hospital,
-                          color: _selectedLoginType == 'hospital' 
-                              ? Colors.white 
+                          color: _selectedLoginType == 'hospital'
+                              ? Colors.white
                               : const Color(0xFF6C5CE7),
-                          size: 30,
+                          size: 24,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         Text(
                           'Hospital',
                           style: TextStyle(
-                            color: _selectedLoginType == 'hospital' 
-                                ? Colors.white 
+                            color: _selectedLoginType == 'hospital'
+                                ? Colors.white
                                 : const Color(0xFF6C5CE7),
                             fontWeight: FontWeight.bold,
+                            fontSize: 13,
                           ),
                         ),
                       ],

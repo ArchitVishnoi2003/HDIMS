@@ -1,26 +1,51 @@
 {
   "project_info": {
-    "project_number": "784503341281",
-    "project_id": "hdimrs",
-    "storage_bucket": "hdimrs.firebasestorage.app"
+    "project_number": "836255283607",
+    "project_id": "hdimss-c0668",
+    "storage_bucket": "hdimss-c0668.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:784503341281:android:c81727639de933f33b37a0",
+        "mobilesdk_app_id": "1:836255283607:android:8688cdc89c0f2372192cd2",
         "android_client_info": {
           "package_name": "com.example.hdimss"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "836255283607-c8konjg1pumokiqh1t4g1bou6vsug1db.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.hdimss",
+            "certificate_hash": "a6286ce40fd9089fe1031012835761e73d29b606"
+          }
+        },
+        {
+          "client_id": "836255283607-hdvkgimh8i6hm4m90okvh6f63hn4o5v8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyB8jygf_QIrzPtd9uWUcwkUD_6IST1TixU"
+          "current_key": "AIzaSyBzod_sWeD8l9JyczWlGO5okDzZ2BPlrms"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "836255283607-hdvkgimh8i6hm4m90okvh6f63hn4o5v8.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "836255283607-k57qr7pv0n6neobkci6gocntk332497o.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.hdimss"
+              }
+            }
+          ]
         }
       }
     }

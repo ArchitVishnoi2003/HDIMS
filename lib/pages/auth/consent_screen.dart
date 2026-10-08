@@ -37,14 +37,28 @@ class _ConsentScreenState extends State<ConsentScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     setState(() => _saving = true);
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .update({
-      'privacyConsentAt': FieldValue.serverTimestamp(),
-      'privacyConsentVersion': '1.0',
-    });
-    // UserTypeWrapper's stream will pick up the change and re-route automatically.
+    try {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update({
+        'privacyConsentAt': FieldValue.serverTimestamp(),
+        'privacyConsentVersion': '1.0',
+      }).timeout(const Duration(seconds: 10), onTimeout: () {
+        throw Exception('Firestore write timed out. Make sure Cloud Firestore database is created in Firebase Console.');
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString().replaceAll("Exception: ", "")}'),
+            backgroundColor: Colors.red[700],
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
   }
 
   @override
